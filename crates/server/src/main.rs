@@ -51,7 +51,7 @@ async fn main() {
     let port = std::env::var("CC_SWITCH_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(3160);
+        .unwrap_or(17666);
 
     let addr = format!("127.0.0.1:{}", port);
     tracing::info!("Starting CC-Switch server on {}", addr);

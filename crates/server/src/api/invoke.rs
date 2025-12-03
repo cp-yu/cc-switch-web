@@ -27,10 +27,10 @@ pub struct InvokeResponse {
 }
 
 pub async fn invoke_handler(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
     Json(req): Json<InvokeRequest>,
 ) -> impl IntoResponse {
-    match dispatch_command(&req.command, &req.payload).await {
+    match dispatch_command(&state, &req.command, &req.payload).await {
         Ok(result) => (
             StatusCode::OK,
             Json(InvokeResponse {

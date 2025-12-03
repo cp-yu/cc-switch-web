@@ -14,5 +14,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.5", features = ["cors"] }
 
-# Shared core library (TODO: add when extracted from src-tauri)
-# cc-switch-core = { path = "../core", optional = true }
+# 共享核心逻辑库
+cc-switch-core = { path = "../core" }

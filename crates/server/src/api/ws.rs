@@ -83,7 +83,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServerState>) {
     // Message receiving loop
     while let Some(Ok(msg)) = ws_receiver.next().await {
         if let Message::Text(text) = msg {
-            if let Some(response) = handle_message(&mut subscriptions, &text).await {
+            if let Some(response) =
+                handle_message(&state, &mut subscriptions, &text).await
+            {
                 if tx.send(response).await.is_err() {
                     break;
                 }
@@ -98,6 +100,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServerState>) {
 }
 
 async fn handle_message(
+    state: &Arc<ServerState>,
     subscriptions: &mut HashSet<String>,
     text: &str,
 ) -> Option<String> {
@@ -140,7 +143,7 @@ async fn handle_message(
         "ping" => RpcResponse::success(id, serde_json::json!({ "pong": true })),
         _ => {
             // Business commands
-            match dispatch_command(&request.method, &request.params).await {
+            match dispatch_command(state, &request.method, &request.params).await {
                 Ok(result) => RpcResponse::success(id, result),
                 Err(err) => RpcResponse::error(Some(id), err),
             }
