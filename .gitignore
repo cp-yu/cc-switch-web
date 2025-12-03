@@ -18,3 +18,4 @@ GEMINI.md
 /.vscode
 vitest-report.json
 crates/server/target
+crates/core/target

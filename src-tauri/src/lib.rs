@@ -26,9 +26,15 @@ mod usage_script;
 pub use app_config::{AppType, McpApps, McpServer, MultiAppConfig};
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
 pub use commands::*;
-pub use config::{get_claude_mcp_path, get_claude_settings_path, read_json_file};
+pub use config::{get_app_config_dir, get_app_config_path, get_claude_config_dir, get_claude_mcp_path, get_claude_settings_path, read_json_file};
 pub use database::Database;
-pub use deeplink::{import_provider_from_deeplink, parse_deeplink_url, DeepLinkImportRequest};
+pub use deeplink::{
+    import_mcp_from_deeplink, import_prompt_from_deeplink, import_provider_from_deeplink,
+    import_skill_from_deeplink, parse_and_merge_config, parse_deeplink_url, DeepLinkImportRequest,
+};
+pub use prompt::Prompt;
+pub use services::env_checker::{check_env_conflicts, EnvConflict};
+pub use services::env_manager::{delete_env_vars, restore_from_backup, BackupInfo};
 pub use error::AppError;
 pub use mcp::{
     import_from_claude, import_from_codex, import_from_gemini, remove_server_from_claude,
@@ -41,8 +47,22 @@ pub use services::{
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, SkillService,
     SpeedtestService,
 };
-pub use settings::{update_settings, AppSettings};
+pub use settings::{get_settings, reload_settings, update_settings, AppSettings};
 pub use store::AppState;
+
+// Re-export claude_plugin functions for web server use
+pub use claude_plugin::{clear_claude_config, write_claude_config};
+
+// Re-export claude_mcp functions for web server use
+pub use claude_mcp::{
+    delete_mcp_server as delete_claude_mcp_server_raw,
+    get_mcp_status as get_claude_mcp_status_raw, read_mcp_json as read_claude_mcp_config_raw,
+    upsert_mcp_server as upsert_claude_mcp_server_raw,
+    validate_command_in_path as validate_mcp_command_raw, McpStatus,
+};
+
+// Re-export gemini_config functions for web server use
+pub use gemini_config::get_gemini_dir;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
