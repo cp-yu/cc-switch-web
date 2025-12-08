@@ -262,6 +262,61 @@ sudo systemctl status cc-switch-web
 
 Web 版本使用 Rust 后端，内嵌 React 前端，通过 WebSocket + JSON-RPC 2.0 协议通信。所有数据存储在与桌面版本相同的 SQLite 数据库（`~/.cc-switch/cc-switch.db`）中。
 
+**从源码构建：**
+
+如果你想在本地构建 Web 版本而不是下载预编译二进制文件：
+
+```bash
+# 克隆仓库
+git clone https://github.com/farion1231/cc-switch.git
+cd cc-switch
+
+# 一键构建（推荐）
+./build-web-release.sh
+
+# 输出在 release-web/ 目录
+cd release-web
+./cc-switch-web
+```
+
+构建脚本会自动：
+- 检查依赖（cargo、node、pnpm）
+- 安装前端依赖
+- 以 web 模式构建前端
+- 编译 Rust 后端（release 模式）
+- 打包为 `cc-switch-web-linux-x64-v{版本号}.tar.gz`
+
+**开发模式：**
+
+支持热重载的开发模式：
+
+```bash
+# 同时启动前端开发服务器和后端
+./start-web.sh
+
+# 前端: http://localhost:3001（支持热重载）
+# 后端: http://localhost:17666
+
+# 停止所有服务
+./stop-web.sh
+```
+
+**手动构建步骤：**
+
+```bash
+# 安装依赖
+pnpm install
+
+# 构建前端（web 模式）
+pnpm build:web
+
+# 构建后端（release）
+cargo build --release --manifest-path crates/server/Cargo.toml
+
+# 运行
+./crates/server/target/release/cc-switch-web
+```
+
 ## 快速开始
 
 ### 基本使用

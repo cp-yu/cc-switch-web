@@ -262,6 +262,61 @@ sudo systemctl status cc-switch-web
 
 The Web version uses a Rust backend with embedded React frontend, communicating via WebSocket + JSON-RPC 2.0 protocol. All data is stored in the same SQLite database (`~/.cc-switch/cc-switch.db`) used by the desktop version.
 
+**Build from Source:**
+
+If you want to build the Web version locally instead of downloading pre-built binaries:
+
+```bash
+# Clone the repository
+git clone https://github.com/farion1231/cc-switch.git
+cd cc-switch
+
+# One-click build (recommended)
+./build-web-release.sh
+
+# Output will be in release-web/ directory
+cd release-web
+./cc-switch-web
+```
+
+The build script will:
+- Check dependencies (cargo, node, pnpm)
+- Install frontend dependencies
+- Build frontend in web mode
+- Compile Rust backend (release mode)
+- Package everything into `cc-switch-web-linux-x64-v{version}.tar.gz`
+
+**Development Mode:**
+
+For development with hot-reload:
+
+```bash
+# Start both frontend dev server and backend
+./start-web.sh
+
+# Frontend: http://localhost:3001 (with hot-reload)
+# Backend:  http://localhost:17666
+
+# Stop all services
+./stop-web.sh
+```
+
+**Manual Build Steps:**
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build frontend (web mode)
+pnpm build:web
+
+# Build backend (release)
+cargo build --release --manifest-path crates/server/Cargo.toml
+
+# Run
+./crates/server/target/release/cc-switch-web
+```
+
 ## Quick Start
 
 ### Basic Usage

@@ -192,6 +192,131 @@ paru -S cc-switch-bin
 
 [Releases](../../releases) から最新版の `CC-Switch-v{version}-Linux.deb` または `CC-Switch-v{version}-Linux.AppImage` をダウンロード。
 
+### Web 版（ヘッドレス / SSH サーバー）
+
+**Web 版が必要な理由**
+
+SSH 経由でリモートサーバーを操作する場合や、ヘッドレス環境（Docker コンテナ、CI/CD パイプライン、クラウドインスタンス）では、デスクトップ GUI を使用できません。Web 版はブラウザからアクセス可能なインターフェースを提供し、全機能を維持しながらこの問題を解決します。
+
+**ユースケース：**
+- 🖥️ SSH 経由のリモートサーバー管理
+- 🐳 X11/Wayland なしの Docker コンテナ
+- ☁️ クラウドインスタンス（AWS EC2、Azure VM、GCP Compute）
+- 🔄 AI CLI 設定が必要な CI/CD パイプライン
+- 🏢 ヘッドレスサーバー環境
+
+**ダウンロードと実行：**
+
+```bash
+# Web 版をダウンロード
+wget https://github.com/farion1231/cc-switch/releases/latest/download/cc-switch-web-linux-x64-v{version}.tar.gz
+
+# 解凍
+tar -xzf cc-switch-web-linux-x64-v{version}.tar.gz
+cd cc-switch-web/
+
+# 実行（デフォルトポート 17666）
+./cc-switch-web
+
+# カスタムポートを指定
+CC_SWITCH_PORT=8080 ./cc-switch-web
+
+# 全インターフェースでリッスン（リモートアクセス用）
+CC_SWITCH_HOST=0.0.0.0 ./cc-switch-web
+```
+
+ブラウザで `http://localhost:17666` を開きます（リモートアクセスの場合はサーバーの IP アドレスを使用）。
+
+**設定オプション：**
+
+| 環境変数 | デフォルト | 説明 |
+|---------|-----------|------|
+| `CC_SWITCH_PORT` | 17666 | サーバーポート |
+| `CC_SWITCH_HOST` | 127.0.0.1 | バインドアドレス（リモートは 0.0.0.0） |
+| `CC_SWITCH_AUTO_PORT` | true | ポート競合時に自動選択 |
+| `CC_SWITCH_AUTH_TOKEN` | （なし） | オプションの認証トークン |
+
+**システムサービスとして実行：**
+
+```bash
+# サービスをインストール（root 権限必要）
+sudo cp cc-switch-web /opt/
+sudo cp cc-switch-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cc-switch-web
+sudo systemctl start cc-switch-web
+
+# ステータス確認
+sudo systemctl status cc-switch-web
+```
+
+**特徴：**
+- ✅ 全デスクトップ機能が利用可能（Provider/MCP/Skills/Prompts 管理）
+- ✅ WebSocket リアルタイム更新
+- ✅ デスクトップ版とデータ共有（`~/.cc-switch/`）
+- ✅ フロントエンド内蔵シングルバイナリ（19MB）
+- ✅ ゼロ依存（Node.js、データベースサーバー不要）
+- ✅ ポート競合時の自動選択
+
+**アーキテクチャ：**
+
+Web 版は Rust バックエンドと内蔵 React フロントエンドを使用し、WebSocket + JSON-RPC 2.0 プロトコルで通信します。すべてのデータはデスクトップ版と同じ SQLite データベース（`~/.cc-switch/cc-switch.db`）に保存されます。
+
+**ソースからビルド：**
+
+プリビルドバイナリをダウンロードする代わりにローカルでビルドする場合：
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/farion1231/cc-switch.git
+cd cc-switch
+
+# ワンクリックビルド（推奨）
+./build-web-release.sh
+
+# 出力は release-web/ ディレクトリ
+cd release-web
+./cc-switch-web
+```
+
+ビルドスクリプトは自動的に：
+- 依存関係をチェック（cargo、node、pnpm）
+- フロントエンド依存をインストール
+- Web モードでフロントエンドをビルド
+- Rust バックエンドをコンパイル（release モード）
+- `cc-switch-web-linux-x64-v{version}.tar.gz` にパッケージ化
+
+**開発モード：**
+
+ホットリロード対応の開発モード：
+
+```bash
+# フロントエント開発サーバーとバックエンドを同時起動
+./start-web.sh
+
+# フロントエンド: http://localhost:3001（ホットリロード対応）
+# バックエンド: http://localhost:17666
+
+# 全サービスを停止
+./stop-web.sh
+```
+
+**手動ビルド手順：**
+
+```bash
+# 依存をインストール
+pnpm install
+
+# フロントエンドをビルド（web モード）
+pnpm build:web
+
+# バックエンドをビルド（release）
+cargo build --release --manifest-path crates/server/Cargo.toml
+
+# 実行
+./crates/server/target/release/cc-switch-web
+```
+
 ## クイックスタート
 
 ### 基本的な使い方
