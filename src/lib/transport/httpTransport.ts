@@ -6,6 +6,7 @@ async function httpInvoke<T>(command: string, payload?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}/invoke`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include", // Include cookies for auth
     body: JSON.stringify({ command, payload: payload ?? {} }),
   });
 
@@ -16,9 +17,17 @@ async function httpInvoke<T>(command: string, payload?: unknown): Promise<T> {
 
   if (!text) return undefined as T;
   try {
-    return JSON.parse(text) as T;
-  } catch {
-    return text as T;
+    const json = JSON.parse(text);
+    // Unwrap result/error envelope from server response
+    if (json.error) {
+      throw new Error(json.error);
+    }
+    return (json.result ?? json) as T;
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      return text as T;
+    }
+    throw e;
   }
 }
 

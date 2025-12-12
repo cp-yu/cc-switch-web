@@ -5,7 +5,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use futures::{SinkExt, StreamExt};
@@ -16,6 +16,29 @@ use crate::rpc::{RpcRequest, RpcResponse, RpcError};
 use crate::state::ServerState;
 use super::dispatch::dispatch_command;
 
+/// Cookie name for web session authentication
+const SESSION_COOKIE_NAME: &str = "cc-switch-session";
+
+/// Extract session token from cookie header
+fn extract_session_cookie(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(axum::http::header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .find_map(|cookie| {
+            let cookie = cookie.trim();
+            if cookie.starts_with(SESSION_COOKIE_NAME) {
+                cookie
+                    .strip_prefix(SESSION_COOKIE_NAME)
+                    .and_then(|s| s.strip_prefix('='))
+                    .map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+}
+
 #[derive(Deserialize)]
 pub struct WsAuthQuery {
     auth: Option<String>,
@@ -25,12 +48,39 @@ pub async fn upgrade_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<ServerState>>,
     Query(query): Query<WsAuthQuery>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    // Validate token
+    // Auth check with multiple methods:
+    // 1. If auth_token (env var) is set, check query param
+    // 2. If auth_config (web auth) is set, check cookie
+    // 3. If neither is set, allow connection
+
+    // Check query param auth (backward compatibility with CC_SWITCH_AUTH_TOKEN)
     if let Some(expected_token) = &state.auth_token {
         match query.auth.as_deref() {
-            Some(token) if token == expected_token => {}
-            _ => return StatusCode::UNAUTHORIZED.into_response(),
+            Some(token) if token == expected_token => {
+                // Query param auth passed, proceed
+                return ws.on_upgrade(move |socket| handle_socket(socket, state));
+            }
+            _ => {
+                // Query param auth failed, but continue to check cookie if web auth is enabled
+                if state.auth_config.is_none() {
+                    // No web auth configured, fail the request
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+            }
+        }
+    }
+
+    // Check cookie auth (web authentication)
+    if state.auth_config.is_some() {
+        let session_token = extract_session_cookie(&headers);
+        let is_valid = session_token
+            .map(|token| state.session_store.validate_session(&token))
+            .unwrap_or(false);
+
+        if !is_valid {
+            return StatusCode::UNAUTHORIZED.into_response();
         }
     }
 

@@ -78,6 +78,71 @@ VITE_CC_SWITCH_MODE=ws
 VITE_CC_SWITCH_API_BASE=/api
 ```
 
+## 密码保护
+
+Web 模式支持可选的密码保护，防止未授权访问。
+
+### 启用密码保护
+
+1. **生成密码哈希**：
+
+   ```bash
+   # 使用 Python (推荐)
+   python3 -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt(12)).decode())"
+
+   # 或使用 htpasswd
+   htpasswd -nbBC 12 "" "your-password" | tr -d ':\n' | sed 's/$2y/$2b/'
+   ```
+
+2. **创建配置文件** `~/.cc-switch/web-auth.json`：
+
+   ```json
+   {
+     "password_hash": "$2b$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+   ```
+
+3. **重启服务器** - 认证自动启用
+
+### 禁用密码保护
+
+删除或重命名配置文件即可：
+
+```bash
+rm ~/.cc-switch/web-auth.json
+# 或
+mv ~/.cc-switch/web-auth.json ~/.cc-switch/web-auth.json.disabled
+```
+
+### 修改密码
+
+重新生成哈希并更新配置文件：
+
+```bash
+# 生成新哈希
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'new-password', bcrypt.gensalt(12)).decode())"
+
+# 编辑配置文件
+nano ~/.cc-switch/web-auth.json
+```
+
+### 安全特性
+
+| 特性 | 说明 |
+|------|------|
+| 密码存储 | bcrypt 哈希 (cost=12)，不可逆 |
+| 会话管理 | HttpOnly Cookie，7天有效期 |
+| Cookie 安全 | SameSite=Strict，防止 CSRF |
+| 会话清理 | 每小时自动清理过期会话 |
+| 向后兼容 | 无配置文件时认证禁用 |
+
+### 注意事项
+
+- 密码只能通过编辑配置文件修改，不提供 UI 修改入口
+- 配置文件中只存储哈希，原始密码不会被保存
+- 关闭浏览器后 Cookie 仍然有效（7天内无需重新登录）
+- 清除浏览器 Cookie 后需要重新登录
+
 ## 端口说明
 
 - **前端**: `3001` - Web 界面
@@ -105,6 +170,7 @@ Web 模式支持 70+ API 命令：
 - ✅ Skill 技能管理
 - ✅ DeepLink 导入
 - ✅ 环境变量管理
+- ✅ 密码保护（可选）
 - ❌ 系统托盘（仅桌面端）
 - ❌ 自动启动（仅桌面端）
 - ❌ 文件对话框（仅桌面端）

@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { UpdateProvider } from "./contexts/UpdateContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import "./index.css";
 // 导入国际化配置
 import "./i18n";
@@ -79,10 +80,12 @@ async function bootstrap() {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
-          <UpdateProvider>
-            <App />
-            <Toaster />
-          </UpdateProvider>
+          <AuthProvider>
+            <UpdateProvider>
+              <App />
+              <Toaster />
+            </UpdateProvider>
+          </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </React.StrictMode>,

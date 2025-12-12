@@ -234,7 +234,32 @@ CC_SWITCH_HOST=0.0.0.0 ./cc-switch-web
 | `CC_SWITCH_PORT` | 17666 | サーバーポート |
 | `CC_SWITCH_HOST` | 127.0.0.1 | バインドアドレス（リモートは 0.0.0.0） |
 | `CC_SWITCH_AUTO_PORT` | true | ポート競合時に自動選択 |
-| `CC_SWITCH_AUTH_TOKEN` | （なし） | オプションの認証トークン |
+
+**パスワード保護（オプション）：**
+
+Web インスタンスにパスワード認証を有効化：
+
+```bash
+# パスワードハッシュを生成
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt(12)).decode())"
+
+# 設定ファイルを作成
+cat > ~/.cc-switch/web-auth.json << 'EOF'
+{
+  "password_hash": "$2b$12$生成されたハッシュ"
+}
+EOF
+
+# サーバーを再起動 - 認証が有効化されます
+```
+
+特徴：
+- パスワードは bcrypt ハッシュで保存（不可逆）
+- セッション Cookie は 7 日間有効
+- HttpOnly + SameSite=Strict でセキュリティ確保
+- 設定ファイルを削除すると認証無効化
+
+詳細設定は [WEB_MODE.md](WEB_MODE.md) を参照。
 
 **システムサービスとして実行：**
 

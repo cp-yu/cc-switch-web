@@ -22,3 +22,9 @@ mime_guess = "2"
 
 # 共享核心逻辑库
 cc-switch-core = { path = "../core" }
+
+# Auth dependencies
+bcrypt = "0.15"
+rand = "0.8"
+hex = "0.4"
+dirs = "5"

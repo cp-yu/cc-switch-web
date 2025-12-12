@@ -234,7 +234,32 @@ Then open `http://localhost:17666` in your browser (or use the server's IP addre
 | `CC_SWITCH_PORT` | 17666 | Server port |
 | `CC_SWITCH_HOST` | 127.0.0.1 | Bind address (use 0.0.0.0 for remote access) |
 | `CC_SWITCH_AUTO_PORT` | true | Auto-select next port if occupied |
-| `CC_SWITCH_AUTH_TOKEN` | (none) | Optional authentication token |
+
+**Password Protection (Optional):**
+
+To secure your Web instance with password authentication:
+
+```bash
+# Generate password hash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt(12)).decode())"
+
+# Create config file
+cat > ~/.cc-switch/web-auth.json << 'EOF'
+{
+  "password_hash": "$2b$12$your-generated-hash-here"
+}
+EOF
+
+# Restart the server - authentication is now enabled
+```
+
+Features:
+- Password stored as bcrypt hash (not reversible)
+- Session cookie with 7-day expiry
+- HttpOnly + SameSite=Strict for security
+- Delete config file to disable authentication
+
+See [WEB_MODE.md](WEB_MODE.md) for detailed configuration.
 
 **Run as System Service:**
 

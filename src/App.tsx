@@ -39,12 +39,15 @@ import PromptPanel from "@/components/prompts/PromptPanel";
 import { SkillsPage } from "@/components/skills/SkillsPage";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { AgentsPanel } from "@/components/agents/AgentsPanel";
+import { LoginPage } from "@/components/LoginPage";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 type View = "providers" | "settings" | "prompts" | "skills" | "mcp" | "agents";
 
 function App() {
   const { t } = useTranslation();
+  const { isLoading: authLoading, isAuthenticated, authEnabled } = useAuth();
 
   const [activeApp, setActiveApp] = useState<AppId>("claude");
   const [currentView, setCurrentView] = useState<View>("providers");
@@ -326,6 +329,25 @@ function App() {
         );
     }
   };
+
+  // Auth loading state
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <p className="text-sm text-muted-foreground">
+            {t("auth.checking", { defaultValue: "Checking authentication..." })}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Auth required but not authenticated
+  if (authEnabled && !isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <div

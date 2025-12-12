@@ -234,7 +234,32 @@ CC_SWITCH_HOST=0.0.0.0 ./cc-switch-web
 | `CC_SWITCH_PORT` | 17666 | 服务器端口 |
 | `CC_SWITCH_HOST` | 127.0.0.1 | 绑定地址（远程访问用 0.0.0.0） |
 | `CC_SWITCH_AUTO_PORT` | true | 端口被占用时自动选择下一个 |
-| `CC_SWITCH_AUTH_TOKEN` | （无） | 可选的认证令牌 |
+
+**密码保护（可选）：**
+
+为 Web 实例启用密码认证：
+
+```bash
+# 生成密码哈希
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt(12)).decode())"
+
+# 创建配置文件
+cat > ~/.cc-switch/web-auth.json << 'EOF'
+{
+  "password_hash": "$2b$12$生成的哈希值"
+}
+EOF
+
+# 重启服务器 - 认证自动启用
+```
+
+特性：
+- 密码以 bcrypt 哈希存储（不可逆）
+- 会话 Cookie 7 天有效期
+- HttpOnly + SameSite=Strict 安全策略
+- 删除配置文件即可禁用认证
+
+详细配置请参阅 [WEB_MODE.md](WEB_MODE.md)。
 
 **作为系统服务运行：**
 

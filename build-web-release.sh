@@ -9,6 +9,10 @@ VERSION="0.1.0"
 BUILD_DIR="release-web"
 BINARY_NAME="cc-switch-web"
 
+# Rust 编译优化设置
+export CARGO_INCREMENTAL=1  # 启用增量编译
+export CARGO_TARGET_DIR="$PWD/crates/server/target"  # 固定 target 目录位置
+
 echo "╔════════════════════════════════════════════════════╗"
 echo "║       CC-Switch Web Release Builder                ║"
 echo "║                Version $VERSION                       ║"
@@ -20,7 +24,18 @@ echo "📋 Checking dependencies..."
 
 if ! command -v cargo &> /dev/null; then
     echo "❌ Error: cargo not found. Please install Rust."
+    echo "   建议: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
+fi
+
+# 检查是否为新环境（首次编译）
+if [ ! -d ".cargo-cache" ]; then
+    echo ""
+    echo "🆕 检测到新环境，建议先运行依赖预编译："
+    echo "   ./prebuild-deps.sh"
+    echo ""
+    echo "⏳ 继续构建可能需要较长时间（首次编译依赖）..."
+    sleep 3
 fi
 
 if ! command -v node &> /dev/null; then
@@ -44,6 +59,16 @@ rm -rf dist/
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
+# 注意：不清理 target 目录以利用编译缓存
+
+# 显示编译缓存状态
+if [ -d "crates/server/target" ]; then
+    CACHE_SIZE=$(du -sh crates/server/target 2>/dev/null | cut -f1)
+    echo "💾 Using existing build cache (${CACHE_SIZE})"
+else
+    echo "🆕 No build cache found, will compile from scratch"
+fi
+
 # 安装前端依赖
 echo ""
 echo "📦 Installing frontend dependencies..."
@@ -65,7 +90,7 @@ ls -la dist/ | head -10
 
 # 构建后端（会嵌入 dist/ 目录的前端文件）
 echo ""
-echo "🔨 Building backend (Release mode)..."
+echo "🔨 Building backend (Release mode with incremental compilation)..."
 cargo build --release --manifest-path crates/server/Cargo.toml
 
 BINARY_PATH="crates/server/target/release/$BINARY_NAME"
