@@ -38,7 +38,7 @@ impl CoreContext {
         let db = Arc::new(Database::init()?);
         let app_state = AppState::new(db);
 
-        let skill_service = SkillService::new().map(Arc::new).ok();
+        let skill_service = Some(Arc::new(SkillService::new()));
 
         Ok(Self {
             app_state,
@@ -152,6 +152,7 @@ pub async fn test_usage_script(
     base_url: Option<&str>,
     access_token: Option<&str>,
     user_id: Option<&str>,
+    template_type: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let app_type = AppType::from_str(app).map_err(|e| e.to_string())?;
     let result = ProviderService::test_usage_script(
@@ -164,6 +165,7 @@ pub async fn test_usage_script(
         base_url,
         access_token,
         user_id,
+        template_type,
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -283,11 +285,10 @@ pub fn get_config_dir(app: &str) -> Result<String, String> {
     let app_type = AppType::from_str(app).map_err(|e| e.to_string())?;
     let dir = match app_type {
         AppType::Claude => cc_switch::get_claude_config_dir(),
-        AppType::Codex => cc_switch::get_codex_config_path()
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from(".")),
+        AppType::Codex => cc_switch::get_codex_config_dir(),
         AppType::Gemini => cc_switch::get_gemini_dir(),
+        AppType::OpenCode => cc_switch::get_opencode_dir(),
+        AppType::OpenClaw => cc_switch::get_openclaw_dir(),
     };
     Ok(dir.to_string_lossy().to_string())
 }
@@ -455,7 +456,7 @@ pub async fn get_skills(ctx: &CoreContext) -> Result<serde_json::Value, String> 
         .map_err(|e| e.to_string())?;
 
     let skills = service
-        .list_skills(repos)
+        .list_skills(repos, &ctx.app_state().db)
         .await
         .map_err(|e| e.to_string())?;
 

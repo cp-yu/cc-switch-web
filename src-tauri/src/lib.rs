@@ -29,7 +29,9 @@ mod tray;
 mod usage_script;
 
 pub use app_config::{AppType, McpApps, McpServer, MultiAppConfig};
-pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
+pub use codex_config::{
+    get_codex_auth_path, get_codex_config_dir, get_codex_config_path, write_codex_live_atomic,
+};
 pub use commands::open_provider_terminal;
 pub use commands::*;
 pub use config::{get_app_config_dir, get_app_config_path, get_claude_config_dir, get_claude_mcp_path, get_claude_settings_path, read_json_file};
@@ -69,6 +71,8 @@ pub use claude_mcp::{
 
 // Re-export gemini_config functions for web server use
 pub use gemini_config::get_gemini_dir;
+pub use openclaw_config::get_openclaw_dir;
+pub use opencode_config::get_opencode_dir;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 

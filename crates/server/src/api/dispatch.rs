@@ -165,6 +165,7 @@ pub async fn dispatch_command(
             let base_url = params.get("baseUrl").and_then(|v| v.as_str());
             let access_token = params.get("accessToken").and_then(|v| v.as_str());
             let user_id = params.get("userId").and_then(|v| v.as_str());
+            let template_type = params.get("templateType").and_then(|v| v.as_str());
 
             let result = cc_switch_core::test_usage_script(
                 core,
@@ -176,6 +177,7 @@ pub async fn dispatch_command(
                 base_url,
                 access_token,
                 user_id,
+                template_type,
             )
             .await
             .map_err(RpcError::app_error)?;
