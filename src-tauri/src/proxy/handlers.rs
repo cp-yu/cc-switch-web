@@ -165,7 +165,27 @@ async fn handle_claude_transform(
                         .await;
                     });
                 } else {
-                    log::debug!("[Claude] OpenRouter 流式响应缺少 usage 统计，跳过消费记录");
+                    let latency_ms = start_time.elapsed().as_millis() as u64;
+                    let state = state.clone();
+                    let provider_id = provider_id.clone();
+                    let model = model.clone();
+
+                    tokio::spawn(async move {
+                        log_usage(
+                            &state,
+                            &provider_id,
+                            "claude",
+                            &model,
+                            &model,
+                            TokenUsage::default(),
+                            latency_ms,
+                            first_token_ms,
+                            true,
+                            status_code,
+                        )
+                        .await;
+                    });
+                    log::debug!("[Claude] OpenRouter 流式响应缺少 usage 统计，记录 0 token 请求");
                 }
             })
         };
@@ -253,6 +273,34 @@ async fn handle_claude_transform(
                 .await;
             }
         });
+    } else {
+        let model = anthropic_response
+            .get("model")
+            .and_then(|m| m.as_str())
+            .unwrap_or(&ctx.request_model);
+        let latency_ms = ctx.latency_ms();
+        let request_model = ctx.request_model.clone();
+        tokio::spawn({
+            let state = state.clone();
+            let provider_id = ctx.provider.id.clone();
+            let model = model.to_string();
+            async move {
+                log_usage(
+                    &state,
+                    &provider_id,
+                    "claude",
+                    &model,
+                    &request_model,
+                    TokenUsage::default(),
+                    latency_ms,
+                    None,
+                    false,
+                    status.as_u16(),
+                )
+                .await;
+            }
+        });
+        log::debug!("[Claude] 转换后的非流式响应缺少 usage 统计，记录 0 token 请求");
     }
 
     // 构建响应
@@ -510,6 +558,12 @@ async fn log_usage(
 ) {
     use super::usage::logger::UsageLogger;
 
+    if let Ok(config) = state.config.try_read() {
+        if !config.enable_logging {
+            return;
+        }
+    }
+
     let logger = UsageLogger::new(&state.db);
 
     let (multiplier, pricing_model_source) =
@@ -539,5 +593,102 @@ async fn log_usage(
         is_streaming,
     ) {
         log::warn!("[USG-001] 记录使用量失败: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::Database;
+    use crate::error::AppError;
+    use crate::proxy::{
+        failover_switch::FailoverSwitchManager,
+        provider_router::ProviderRouter,
+        types::{ProxyConfig, ProxyStatus},
+    };
+    use std::{collections::HashMap, sync::Arc};
+    use tokio::sync::RwLock;
+
+    fn build_state(db: Arc<Database>, enable_logging: bool) -> ProxyState {
+        let mut config = ProxyConfig::default();
+        config.enable_logging = enable_logging;
+
+        ProxyState {
+            db: db.clone(),
+            config: Arc::new(RwLock::new(config)),
+            status: Arc::new(RwLock::new(ProxyStatus::default())),
+            start_time: Arc::new(RwLock::new(None)),
+            current_providers: Arc::new(RwLock::new(HashMap::new())),
+            provider_router: Arc::new(ProviderRouter::new(db.clone())),
+            app_handle: None,
+            failover_manager: Arc::new(FailoverSwitchManager::new(db)),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_log_usage_records_zero_token_request() -> Result<(), AppError> {
+        let db = Arc::new(Database::memory()?);
+        let state = build_state(db.clone(), true);
+
+        log_usage(
+            &state,
+            "provider-1",
+            "claude",
+            "gpt-4.1",
+            "gpt-4.1",
+            TokenUsage::default(),
+            123,
+            None,
+            true,
+            200,
+        )
+        .await;
+
+        let conn = crate::database::lock_conn!(db.conn);
+        let (count, input_tokens, output_tokens): (i64, i64, i64) = conn
+            .query_row(
+                "SELECT COUNT(*), input_tokens, output_tokens
+                 FROM proxy_request_logs WHERE provider_id = ?1",
+                ["provider-1"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        assert_eq!(count, 1);
+        assert_eq!(input_tokens, 0);
+        assert_eq!(output_tokens, 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_log_usage_respects_enable_logging() -> Result<(), AppError> {
+        let db = Arc::new(Database::memory()?);
+        let state = build_state(db.clone(), false);
+
+        log_usage(
+            &state,
+            "provider-1",
+            "claude",
+            "gpt-4.1",
+            "gpt-4.1",
+            TokenUsage::default(),
+            123,
+            None,
+            false,
+            200,
+        )
+        .await;
+
+        let conn = crate::database::lock_conn!(db.conn);
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM proxy_request_logs WHERE provider_id = ?1",
+                ["provider-1"],
+                |row| row.get(0),
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        assert_eq!(count, 0);
+        Ok(())
     }
 }
