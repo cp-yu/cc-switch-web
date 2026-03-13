@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# CC-Switch Web 模式启动脚本
+# CC-Switch Web 模式后台启动脚本
 
-set -e
+set -euo pipefail
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SCRIPT_SOURCE" ]; do
@@ -14,108 +14,239 @@ PROJECT_ROOT="$(cd -P "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 
 cd "$PROJECT_ROOT"
 
+RUNTIME_DIR="${CC_SWITCH_RUNTIME_DIR:-$PROJECT_ROOT/.run/web}"
+BACKEND_LOG_FILE="$RUNTIME_DIR/backend.log"
+FRONTEND_LOG_FILE="$RUNTIME_DIR/frontend.log"
+BACKEND_PID_FILE="$RUNTIME_DIR/backend.pid"
+FRONTEND_PID_FILE="$RUNTIME_DIR/frontend.pid"
+
+BACKEND_HOST="${CC_SWITCH_HOST:-127.0.0.1}"
+BACKEND_PORT="${CC_SWITCH_PORT:-17666}"
+FRONTEND_HOST="${CC_SWITCH_WEB_HOST:-127.0.0.1}"
+FRONTEND_PORT="${CC_SWITCH_WEB_PORT:-3001}"
+START_TIMEOUT="${CC_SWITCH_START_TIMEOUT:-30}"
+
+BACKEND_BIN="$PROJECT_ROOT/crates/server/target/release/cc-switch-web"
+
+mkdir -p "$RUNTIME_DIR"
+
+is_pid_running() {
+    local pid="${1:-}"
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+read_pid_file() {
+    local pid_file="$1"
+    [[ -f "$pid_file" ]] || return 1
+    local pid
+    pid="$(<"$pid_file")"
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    printf '%s\n' "$pid"
+}
+
+cleanup_stale_pid_file() {
+    local pid_file="$1"
+    local pid
+
+    pid="$(read_pid_file "$pid_file" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && ! is_pid_running "$pid"; then
+        rm -f "$pid_file"
+    fi
+}
+
+probe_tcp() {
+    local host="$1"
+    local port="$2"
+
+    (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1
+}
+
+probe_host_for() {
+    local host="$1"
+    case "$host" in
+        0.0.0.0|::|\*)
+            printf '127.0.0.1\n'
+            ;;
+        *)
+            printf '%s\n' "$host"
+            ;;
+    esac
+}
+
+probe_http() {
+    local host="$1"
+    local port="$2"
+    local path="$3"
+    local line=""
+
+    if command -v curl >/dev/null 2>&1; then
+        curl --silent --fail --max-time 2 "http://$host:$port$path" >/dev/null
+        return
+    fi
+
+    exec 3<>"/dev/tcp/$host/$port" || return 1
+    printf 'GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n' "$path" "$host" >&3 || {
+        exec 3>&-
+        exec 3<&-
+        return 1
+    }
+
+    if ! IFS= read -r -t 2 line <&3; then
+        exec 3>&-
+        exec 3<&-
+        return 1
+    fi
+
+    exec 3>&-
+    exec 3<&-
+    [[ "$line" == HTTP/* ]]
+}
+
+wait_for_http() {
+    local name="$1"
+    local pid="$2"
+    local host="$3"
+    local port="$4"
+    local path="$5"
+    local log_file="$6"
+    local elapsed=0
+
+    while (( elapsed < START_TIMEOUT )); do
+        if probe_http "$host" "$port" "$path"; then
+            return 0
+        fi
+
+        if ! is_pid_running "$pid"; then
+            break
+        fi
+
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    echo "❌ ${name} 启动失败，日志如下："
+    tail -n 40 "$log_file" 2>/dev/null || true
+    return 1
+}
+
+require_command() {
+    local cmd="$1"
+    local message="$2"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "❌ Error: $message"
+        exit 1
+    fi
+}
+
+start_detached() {
+    local log_file="$1"
+    shift
+
+    nohup "$@" </dev/null >>"$log_file" 2>&1 &
+    printf '%s\n' "$!"
+}
+
+resolve_frontend_command() {
+    if command -v pnpm >/dev/null 2>&1; then
+        FRONTEND_CMD=(pnpm exec vite)
+        return
+    fi
+
+    if command -v npx >/dev/null 2>&1; then
+        FRONTEND_CMD=(npx vite)
+        return
+    fi
+
+    echo "❌ Error: pnpm or npx not found. Please install pnpm or npm."
+    exit 1
+}
+
+cleanup_stale_pid_file "$BACKEND_PID_FILE"
+cleanup_stale_pid_file "$FRONTEND_PID_FILE"
+
+BACKEND_PROBE_HOST="$(probe_host_for "$BACKEND_HOST")"
+FRONTEND_PROBE_HOST="$(probe_host_for "$FRONTEND_HOST")"
+
+if pid="$(read_pid_file "$BACKEND_PID_FILE" 2>/dev/null || true)"; [[ -n "$pid" ]] && is_pid_running "$pid"; then
+    echo "❌ Backend is already running (PID: $pid)"
+    echo "   Stop it first: ./stop-web.sh"
+    exit 1
+fi
+
+if pid="$(read_pid_file "$FRONTEND_PID_FILE" 2>/dev/null || true)"; [[ -n "$pid" ]] && is_pid_running "$pid"; then
+    echo "❌ Frontend is already running (PID: $pid)"
+    echo "   Stop it first: ./stop-web.sh"
+    exit 1
+fi
+
+if probe_tcp "$BACKEND_PROBE_HOST" "$BACKEND_PORT"; then
+    echo "❌ Backend port $BACKEND_PORT is already in use"
+    echo "   Stop the existing service or set CC_SWITCH_PORT to another port."
+    exit 1
+fi
+
+if probe_tcp "$FRONTEND_PROBE_HOST" "$FRONTEND_PORT"; then
+    echo "❌ Frontend port $FRONTEND_PORT is already in use"
+    echo "   Stop the existing service or set CC_SWITCH_WEB_PORT to another port."
+    exit 1
+fi
+
 echo "🚀 CC-Switch Web Mode Launcher"
 echo "================================"
 echo ""
 
-# 检查依赖
-if ! command -v cargo &> /dev/null; then
-    echo "❌ Error: cargo not found. Please install Rust."
-    exit 1
-fi
+require_command cargo "cargo not found. Please install Rust."
+require_command node "node not found. Please install Node.js."
 
-if ! command -v node &> /dev/null; then
-    echo "❌ Error: node not found. Please install Node.js."
-    exit 1
-fi
+resolve_frontend_command
 
-# 检查端口占用
-check_port() {
-    if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo "⚠️  Port $1 is already in use"
-        read -p "Kill the process? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            lsof -ti:$1 | xargs -r kill -9
-            echo "✓ Killed process on port $1"
-        else
-            return 1
-        fi
-    fi
-}
-
-echo "📦 Checking ports..."
-check_port 17666 || { echo "Backend port unavailable"; exit 1; }
-check_port 3001 || { echo "Frontend port unavailable"; exit 1; }
-
-echo ""
+echo "📦 Runtime directory: $RUNTIME_DIR"
 echo "🔨 Building backend server..."
 cargo build --release --manifest-path crates/server/Cargo.toml
 
-echo ""
-echo "🎯 Starting services..."
-echo ""
-
-# 启动后端
-echo "▶ Starting backend on http://localhost:17666"
-cargo run --release --manifest-path crates/server/Cargo.toml > /tmp/cc-switch-backend.log 2>&1 &
-BACKEND_PID=$!
-echo "  Backend PID: $BACKEND_PID"
-
-# 等待后端启动
-sleep 2
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "❌ Backend failed to start. Check logs:"
-    tail -20 /tmp/cc-switch-backend.log
+if [[ ! -x "$BACKEND_BIN" ]]; then
+    echo "❌ Error: backend binary not found at $BACKEND_BIN"
     exit 1
 fi
 
-# 检查后端健康
-if ! curl -s http://localhost:17666/ > /dev/null; then
-    echo "❌ Backend is not responding"
-    kill $BACKEND_PID 2>/dev/null
-    exit 1
-fi
+: >"$BACKEND_LOG_FILE"
+: >"$FRONTEND_LOG_FILE"
 
-echo "  ✓ Backend is running"
+echo ""
+echo "🎯 Starting services in background..."
 echo ""
 
-# 启动前端
-echo "▶ Starting frontend on http://localhost:3001"
-npx vite --mode web --port 3001 > /tmp/cc-switch-frontend.log 2>&1 &
-FRONTEND_PID=$!
-echo "  Frontend PID: $FRONTEND_PID"
+echo "▶ Starting backend on http://$BACKEND_HOST:$BACKEND_PORT"
+BACKEND_PID="$(start_detached "$BACKEND_LOG_FILE" env CC_SWITCH_HOST="$BACKEND_HOST" CC_SWITCH_PORT="$BACKEND_PORT" CC_SWITCH_AUTO_PORT=false "$BACKEND_BIN")"
+printf '%s\n' "$BACKEND_PID" >"$BACKEND_PID_FILE"
 
-# 等待前端启动
-sleep 3
-if ! kill -0 $FRONTEND_PID 2>/dev/null; then
-    echo "❌ Frontend failed to start. Check logs:"
-    tail -20 /tmp/cc-switch-frontend.log
-    kill $BACKEND_PID 2>/dev/null
+if ! wait_for_http "Backend" "$BACKEND_PID" "$BACKEND_PROBE_HOST" "$BACKEND_PORT" "/health" "$BACKEND_LOG_FILE"; then
+    rm -f "$BACKEND_PID_FILE"
     exit 1
 fi
 
-echo "  ✓ Frontend is running"
+echo "  ✓ Backend is running (PID: $BACKEND_PID)"
+echo ""
+
+echo "▶ Starting frontend on http://$FRONTEND_HOST:$FRONTEND_PORT"
+FRONTEND_PID="$(start_detached "$FRONTEND_LOG_FILE" env CC_SWITCH_PORT="$BACKEND_PORT" "${FRONTEND_CMD[@]}" --mode web --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort)"
+printf '%s\n' "$FRONTEND_PID" >"$FRONTEND_PID_FILE"
+
+if ! wait_for_http "Frontend" "$FRONTEND_PID" "$FRONTEND_PROBE_HOST" "$FRONTEND_PORT" "/" "$FRONTEND_LOG_FILE"; then
+    kill "$BACKEND_PID" 2>/dev/null || true
+    rm -f "$BACKEND_PID_FILE" "$FRONTEND_PID_FILE"
+    exit 1
+fi
+
+echo "  ✓ Frontend is running (PID: $FRONTEND_PID)"
 echo ""
 echo "================================"
 echo "✨ CC-Switch Web Mode is ready!"
 echo ""
-echo "  Frontend: http://localhost:3001"
-echo "  Backend:  http://localhost:17666"
+echo "  Frontend: http://$FRONTEND_HOST:$FRONTEND_PORT"
+echo "  Backend:  http://$BACKEND_HOST:$BACKEND_PORT"
 echo ""
-echo "  Backend logs:  tail -f /tmp/cc-switch-backend.log"
-echo "  Frontend logs: tail -f /tmp/cc-switch-frontend.log"
-echo ""
-echo "Press Ctrl+C to stop all services"
+echo "  Backend logs:  tail -f $BACKEND_LOG_FILE"
+echo "  Frontend logs: tail -f $FRONTEND_LOG_FILE"
+echo "  Stop all:      ./stop-web.sh"
 echo "================================"
-echo ""
-
-# 保存 PID 供停止脚本使用
-echo $BACKEND_PID > /tmp/cc-switch-backend.pid
-echo $FRONTEND_PID > /tmp/cc-switch-frontend.pid
-
-# 等待中断信号
-trap "echo ''; echo '🛑 Stopping services...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; rm -f /tmp/cc-switch-*.pid; echo '✓ Stopped'; exit 0" INT TERM
-
-# 保持运行
-wait

@@ -24,13 +24,20 @@ CC-Switch 现在支持 Web 模式，通过 WebSocket + JSON-RPC 2.0 协议访问
 
 服务启动后访问：**http://localhost:3001**
 
+脚本会在后台启动服务，并立即返回当前 shell。
+默认运行时文件目录：`./.run/web/`
+
 ### 停止服务
 
 ```bash
 ./stop-web.sh
 ```
 
-或在运行 `start-web.sh` 的终端按 `Ctrl+C`
+如需在 `chroot` 中改用其他运行时目录：
+
+```bash
+CC_SWITCH_RUNTIME_DIR=/tmp/cc-switch-web ./start-web.sh
+```
 
 ## 手动启动（开发模式）
 

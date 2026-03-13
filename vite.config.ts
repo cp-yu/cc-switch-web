@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { codeInspectorPlugin } from "code-inspector-plugin";
 
+const backendPort = Number(process.env.CC_SWITCH_PORT || 17666);
+
 export default defineConfig(({ command }) => ({
   root: "src",
   plugins: [
@@ -22,7 +24,7 @@ export default defineConfig(({ command }) => ({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:17666",
+        target: `http://127.0.0.1:${backendPort}`,
         changeOrigin: true,
         ws: true,
       },

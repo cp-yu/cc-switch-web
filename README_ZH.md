@@ -291,7 +291,7 @@ cd release-web
 支持热重载的开发模式：
 
 ```bash
-# 同时启动前端开发服务器和后端
+# 在后台同时启动前端开发服务器和后端
 ./start-web.sh
 
 # 前端: http://localhost:3001（支持热重载）
@@ -299,6 +299,16 @@ cd release-web
 
 # 停止所有服务
 ./stop-web.sh
+```
+
+运行时文件默认写入 `./.run/web/`：
+- 日志：`backend.log`、`frontend.log`
+- PID：`backend.pid`、`frontend.pid`
+
+如果在 `chroot` 或其他受限环境里不想写入项目目录，可以覆盖：
+
+```bash
+CC_SWITCH_RUNTIME_DIR=/tmp/cc-switch-web ./start-web.sh
 ```
 
 **手动构建步骤：**
