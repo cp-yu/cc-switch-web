@@ -20,6 +20,7 @@ pub use cc_switch::{
     LogFilters, McpServer as CoreMcpServer, ModelPricingInfo as CoreModelPricingInfo,
     ModelStats, PaginatedLogs, Provider as CoreProvider, ProviderLimitStatus, ProviderStats,
     RequestLogDetail, StreamCheckConfig, StreamCheckResult, StreamCheckService, UsageSummary,
+    WEB_COMPAT_TAURI_COMMANDS,
 };
 
 /// 核心上下文

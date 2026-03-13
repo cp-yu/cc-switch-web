@@ -15,7 +15,7 @@ use super::dispatch::dispatch_command;
 const SESSION_COOKIE_NAME: &str = "cc-switch-session";
 
 /// Methods that bypass authentication check (public endpoints)
-const PUBLIC_METHODS: &[&str] = &["auth.status", "auth.login", "auth.check"];
+pub const PUBLIC_METHODS: &[&str] = &["auth.status", "auth.login", "auth.check"];
 
 /// Extract session token from cookie header
 fn extract_session_cookie(headers: &HeaderMap) -> Option<String> {

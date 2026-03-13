@@ -19,6 +19,9 @@ use super::dispatch::dispatch_command;
 /// Cookie name for web session authentication
 const SESSION_COOKIE_NAME: &str = "cc-switch-session";
 
+/// Protocol-only WebSocket methods that do not participate in business command dispatch.
+pub const WS_PROTOCOL_METHODS: &[&str] = &["event.subscribe", "event.unsubscribe", "ping"];
+
 /// Extract session token from cookie header
 fn extract_session_cookie(headers: &HeaderMap) -> Option<String> {
     headers
