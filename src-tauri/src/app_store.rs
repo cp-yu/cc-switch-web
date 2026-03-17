@@ -1,6 +1,8 @@
 use serde_json::Value;
+use std::env;
 use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
+#[cfg(feature = "desktop")]
 use tauri_plugin_store::StoreExt;
 
 use crate::error::AppError;
@@ -26,6 +28,7 @@ pub fn get_app_config_dir_override() -> Option<PathBuf> {
     override_cache().read().ok()?.clone()
 }
 
+#[cfg(feature = "desktop")]
 fn read_override_from_store(app: &tauri::AppHandle) -> Option<PathBuf> {
     let store = match app.store_builder("app_paths.json").build() {
         Ok(store) => store,
@@ -63,14 +66,32 @@ fn read_override_from_store(app: &tauri::AppHandle) -> Option<PathBuf> {
     }
 }
 
+#[cfg(not(feature = "desktop"))]
+fn read_override_from_env() -> Option<PathBuf> {
+    env::var("CC_SWITCH_CONFIG_DIR")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .map(|v| resolve_path(&v))
+}
+
 /// 从 Store 刷新 app_config_dir 覆盖值并更新缓存
+#[cfg(feature = "desktop")]
 pub fn refresh_app_config_dir_override(app: &tauri::AppHandle) -> Option<PathBuf> {
     let value = read_override_from_store(app);
     update_cached_override(value.clone());
     value
 }
 
+#[cfg(not(feature = "desktop"))]
+pub fn refresh_app_config_dir_override() -> Option<PathBuf> {
+    let value = read_override_from_env();
+    update_cached_override(value.clone());
+    value
+}
+
 /// 写入 app_config_dir 到 Tauri Store
+#[cfg(feature = "desktop")]
 pub fn set_app_config_dir_to_store(
     app: &tauri::AppHandle,
     path: Option<&str>,
@@ -105,6 +126,16 @@ pub fn set_app_config_dir_to_store(
     Ok(())
 }
 
+#[cfg(not(feature = "desktop"))]
+pub fn set_app_config_dir_to_store(path: Option<&str>) -> Result<(), AppError> {
+    let value = path
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(resolve_path);
+    update_cached_override(value);
+    Ok(())
+}
+
 /// 解析路径，支持 ~ 开头的相对路径
 fn resolve_path(raw: &str) -> PathBuf {
     if raw == "~" {
@@ -125,11 +156,18 @@ fn resolve_path(raw: &str) -> PathBuf {
 }
 
 /// 从旧的 settings.json 迁移 app_config_dir 到 Store
+#[cfg(feature = "desktop")]
 pub fn migrate_app_config_dir_from_settings(app: &tauri::AppHandle) -> Result<(), AppError> {
     // app_config_dir 已从 settings.json 移除，此函数保留但不再执行迁移
     // 如果用户在旧版本设置过 app_config_dir，需要在 Store 中手动配置
     log::info!("app_config_dir 迁移功能已移除，请在设置中重新配置");
 
     let _ = refresh_app_config_dir_override(app);
+    Ok(())
+}
+
+#[cfg(not(feature = "desktop"))]
+pub fn migrate_app_config_dir_from_settings() -> Result<(), AppError> {
+    let _ = refresh_app_config_dir_override();
     Ok(())
 }

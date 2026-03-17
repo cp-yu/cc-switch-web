@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# 复用现有 Tauri crate 中的业务逻辑与类型
-cc_switch = { path = "../../src-tauri", package = "cc-switch" }
+# Reuse src-tauri shared logic in headless mode only
+cc_switch = { path = "../../src-tauri", package = "cc-switch", default-features = false, features = ["headless"] }
 indexmap = { version = "2", features = ["serde"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }

@@ -9,6 +9,7 @@ use crate::provider::Provider;
 use crate::proxy::server::ProxyServer;
 use crate::proxy::types::*;
 use crate::services::provider::write_live_with_common_config;
+use crate::ui_runtime::UiAppHandle;
 use serde_json::{json, Value};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -36,7 +37,7 @@ pub struct ProxyService {
     db: Arc<Database>,
     server: Arc<RwLock<Option<ProxyServer>>>,
     /// AppHandle，用于传递给 ProxyServer 以支持故障转移时的 UI 更新
-    app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
+    app_handle: Arc<RwLock<Option<UiAppHandle>>>,
 }
 
 impl ProxyService {
@@ -74,7 +75,7 @@ impl ProxyService {
     }
 
     /// 设置 AppHandle（在应用初始化时调用）
-    pub fn set_app_handle(&self, handle: tauri::AppHandle) {
+    pub fn set_app_handle(&self, handle: UiAppHandle) {
         futures::executor::block_on(async {
             *self.app_handle.write().await = Some(handle);
         });

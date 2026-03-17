@@ -3,10 +3,13 @@
 use crate::database::Database;
 use crate::error::AppError;
 use crate::services::usage_stats::*;
+#[cfg(feature = "desktop")]
 use crate::store::AppState;
+#[cfg(feature = "desktop")]
 use tauri::State;
 
 /// 获取使用量汇总
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_usage_summary(
     state: State<'_, AppState>,
@@ -17,6 +20,7 @@ pub fn get_usage_summary(
 }
 
 /// 获取每日趋势
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_usage_trends(
     state: State<'_, AppState>,
@@ -27,18 +31,21 @@ pub fn get_usage_trends(
 }
 
 /// 获取 Provider 统计
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_provider_stats(state: State<'_, AppState>) -> Result<Vec<ProviderStats>, AppError> {
     state.db.get_provider_stats()
 }
 
 /// 获取模型统计
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_model_stats(state: State<'_, AppState>) -> Result<Vec<ModelStats>, AppError> {
     state.db.get_model_stats()
 }
 
 /// 获取请求日志列表
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_request_logs(
     state: State<'_, AppState>,
@@ -50,6 +57,7 @@ pub fn get_request_logs(
 }
 
 /// 获取单个请求详情
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_request_detail(
     state: State<'_, AppState>,
@@ -150,12 +158,14 @@ pub fn remove_model_pricing(db: &Database, model_id: String) -> Result<(), AppEr
     Ok(())
 }
 
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn get_model_pricing(state: State<'_, AppState>) -> Result<Vec<ModelPricingInfo>, AppError> {
     list_model_pricing(&state.db)
 }
 
 /// 更新模型定价
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn update_model_pricing(
     state: State<'_, AppState>,
@@ -178,6 +188,7 @@ pub fn update_model_pricing(
 }
 
 /// 检查 Provider 使用限额
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn check_provider_limits(
     state: State<'_, AppState>,
@@ -188,6 +199,7 @@ pub fn check_provider_limits(
 }
 
 /// 删除模型定价
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn delete_model_pricing(state: State<'_, AppState>, model_id: String) -> Result<(), AppError> {
     remove_model_pricing(&state.db, model_id)

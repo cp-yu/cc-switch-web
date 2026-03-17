@@ -8,8 +8,11 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
+#[cfg(feature = "desktop")]
 use tauri::AppHandle;
+#[cfg(feature = "desktop")]
 use tauri::State;
+#[cfg(feature = "desktop")]
 use tauri_plugin_opener::OpenerExt;
 
 #[cfg(target_os = "windows")]
@@ -19,6 +22,7 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// 打开外部链接
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn open_external(app: AppHandle, url: String) -> Result<bool, String> {
     let url = if url.starts_with("http://") || url.starts_with("https://") {
@@ -35,6 +39,7 @@ pub async fn open_external(app: AppHandle, url: String) -> Result<bool, String> 
 }
 
 /// 检查更新
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn check_for_updates(handle: AppHandle) -> Result<bool, String> {
     handle
@@ -49,7 +54,7 @@ pub async fn check_for_updates(handle: AppHandle) -> Result<bool, String> {
 }
 
 /// 判断是否为便携版（绿色版）运行
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn is_portable_mode() -> Result<bool, String> {
     let exe_path = std::env::current_exe().map_err(|e| format!("获取可执行路径失败: {e}"))?;
     if let Some(dir) = exe_path.parent() {
@@ -61,21 +66,21 @@ pub async fn is_portable_mode() -> Result<bool, String> {
 
 /// 获取应用启动阶段的初始化错误（若有）。
 /// 用于前端在早期主动拉取，避免事件订阅竞态导致的提示缺失。
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn get_init_error() -> Result<Option<InitErrorPayload>, String> {
     Ok(crate::init_status::get_init_error())
 }
 
 /// 获取 JSON→SQLite 迁移结果（若有）。
 /// 只返回一次 true，之后返回 false，用于前端显示一次性 Toast 通知。
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn get_migration_result() -> Result<bool, String> {
     Ok(crate::init_status::take_migration_success())
 }
 
 /// 获取 Skills 自动导入（SSOT）迁移结果（若有）。
 /// 只返回一次 Some({count})，之后返回 None，用于前端显示一次性 Toast 通知。
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn get_skills_migration_result() -> Result<Option<SkillsMigrationPayload>, String> {
     Ok(crate::init_status::take_skills_migration_result())
 }
@@ -128,7 +133,7 @@ fn tool_env_type_and_wsl_distro(_tool: &str) -> (String, Option<String>) {
     ("unknown".to_string(), None)
 }
 
-#[tauri::command]
+#[cfg_attr(feature = "desktop", tauri::command)]
 pub async fn get_tool_versions(
     tools: Option<Vec<String>>,
     wsl_shell_by_tool: Option<HashMap<String, WslShellPreferenceInput>>,
@@ -713,6 +718,7 @@ fn wsl_distro_from_path(path: &Path) -> Option<String> {
 /// 根据提供商配置的环境变量启动一个带有该提供商特定设置的终端
 /// 无需检查是否为当前激活的提供商，任何提供商都可以打开终端
 #[allow(non_snake_case)]
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn open_provider_terminal(
     state: State<'_, crate::store::AppState>,
@@ -1191,6 +1197,7 @@ fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), S
 
 /// 设置窗口主题（Windows/macOS 标题栏颜色）
 /// theme: "dark" | "light" | "system"
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> {
     use tauri::Theme;

@@ -9,10 +9,10 @@
 
 use crate::database::Database;
 use crate::error::AppError;
+use crate::ui_runtime::UiAppHandle;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
 use tokio::sync::RwLock;
 
 /// 故障转移切换管理器
@@ -43,7 +43,7 @@ impl FailoverSwitchManager {
     /// - `Err(e)` - 切换过程中发生错误
     pub async fn try_switch(
         &self,
-        app_handle: Option<&tauri::AppHandle>,
+        app_handle: Option<&UiAppHandle>,
         app_type: &str,
         provider_id: &str,
         provider_name: &str,
@@ -76,7 +76,7 @@ impl FailoverSwitchManager {
 
     async fn do_switch(
         &self,
-        app_handle: Option<&tauri::AppHandle>,
+        app_handle: Option<&UiAppHandle>,
         app_type: &str,
         provider_id: &str,
         provider_name: &str,
@@ -107,6 +107,7 @@ impl FailoverSwitchManager {
         crate::settings::set_current_provider(&app_type_enum, Some(provider_id))?;
 
         // 3. 更新托盘菜单和发射事件
+        #[cfg(feature = "desktop")]
         if let Some(app) = app_handle {
             // 更新托盘菜单
             if let Some(app_state) = app.try_state::<crate::store::AppState>() {
@@ -135,12 +136,15 @@ impl FailoverSwitchManager {
             let event_data = serde_json::json!({
                 "appType": app_type,
                 "providerId": provider_id,
-                "source": "failover"  // 标识来源是故障转移
+                "source": "failover"
             });
             if let Err(e) = app.emit("provider-switched", event_data) {
                 log::error!("[Failover] 发射事件失败: {e}");
             }
         }
+
+        #[cfg(not(feature = "desktop"))]
+        let _ = app_handle;
 
         Ok(true)
     }

@@ -7,6 +7,7 @@ use super::{
     provider_router::ProviderRouter, types::*, ProxyError,
 };
 use crate::database::Database;
+use crate::ui_runtime::UiAppHandle;
 use axum::{
     extract::DefaultBodyLimit,
     routing::{get, post},
@@ -30,7 +31,7 @@ pub struct ProxyState {
     /// 共享的 ProviderRouter（持有熔断器状态，跨请求保持）
     pub provider_router: Arc<ProviderRouter>,
     /// AppHandle，用于发射事件和更新托盘菜单
-    pub app_handle: Option<tauri::AppHandle>,
+    pub app_handle: Option<UiAppHandle>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
 }
@@ -48,7 +49,7 @@ impl ProxyServer {
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
-        app_handle: Option<tauri::AppHandle>,
+        app_handle: Option<UiAppHandle>,
     ) -> Self {
         // 创建共享的 ProviderRouter（熔断器状态将跨所有请求保持）
         let provider_router = Arc::new(ProviderRouter::new(db.clone()));

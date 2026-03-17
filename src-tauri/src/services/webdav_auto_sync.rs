@@ -4,13 +4,13 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
-use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::error::AppError;
 use crate::services::webdav_sync as webdav_sync_service;
 use crate::settings::{self, WebDavSyncSettings};
+use crate::ui_runtime::{spawn, UiAppHandle};
 
 const AUTO_SYNC_DEBOUNCE_MS: u64 = 1000;
 pub(crate) const MAX_AUTO_SYNC_WAIT_MS: u64 = 10_000;
@@ -85,7 +85,8 @@ fn persist_auto_sync_error(settings: &mut WebDavSyncSettings, error: &AppError) 
     let _ = settings::update_webdav_sync_status(settings.status.clone());
 }
 
-fn emit_auto_sync_status_updated(app: &AppHandle, status: &str, error: Option<&str>) {
+#[cfg(feature = "desktop")]
+fn emit_auto_sync_status_updated(app: &UiAppHandle, status: &str, error: Option<&str>) {
     let payload = match error {
         Some(message) => json!({
             "source": "auto",
@@ -103,9 +104,12 @@ fn emit_auto_sync_status_updated(app: &AppHandle, status: &str, error: Option<&s
     }
 }
 
+#[cfg(not(feature = "desktop"))]
+fn emit_auto_sync_status_updated(_app: &UiAppHandle, _status: &str, _error: Option<&str>) {}
+
 async fn run_auto_sync_upload(
     db: &crate::database::Database,
-    app: &AppHandle,
+    app: &UiAppHandle,
 ) -> Result<(), AppError> {
     let mut settings = settings::get_webdav_sync_settings();
     if !should_run_auto_sync(settings.as_ref()) {
@@ -148,7 +152,7 @@ pub fn notify_db_changed(table: &str) {
     let _ = enqueue_change_signal(tx, table);
 }
 
-pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
+pub fn start_worker(db: Arc<crate::database::Database>, app: UiAppHandle) {
     if DB_CHANGE_TX.get().is_some() {
         return;
     }
@@ -159,7 +163,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
         return;
     }
 
-    tauri::async_runtime::spawn(async move {
+    spawn(async move {
         run_worker_loop(db, rx, app).await;
     });
 }
@@ -167,7 +171,7 @@ pub fn start_worker(db: Arc<crate::database::Database>, app: tauri::AppHandle) {
 async fn run_worker_loop(
     db: Arc<crate::database::Database>,
     mut rx: Receiver<String>,
-    app: tauri::AppHandle,
+    app: UiAppHandle,
 ) {
     while let Some(first_table) = rx.recv().await {
         let started_at = Instant::now();
