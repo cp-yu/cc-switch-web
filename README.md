@@ -4,17 +4,18 @@
 
 English | [中文](README_ZH.md) | [日本語](README_JA.md)
 
-This repository is a fork of `cc-switch`. This README is intentionally trimmed to the parts that are still relevant for this fork: local development, build, and runtime workflow.
+This fork keeps the Web runtime as the only official GitHub Release deliverable.
 
 </div>
 
 ## Scope
 
-This fork is used for local customization and ongoing development. The current codebase supports:
+This fork is used for local customization and ongoing development. The current codebase provides:
 
 - Configuration management for Claude Code, Codex, Gemini, OpenCode, and OpenClaw
 - MCP, prompts, skills, proxy, failover, and usage-related features
-- Tauri desktop mode and a single-port web mode
+- A single-binary Web runtime for official releases
+- Tauri desktop code kept in-repo for local development only
 
 ## Screenshots
 
@@ -22,14 +23,41 @@ This fork is used for local customization and ongoing development. The current c
 | :-----------------------------------------------: | :--------------------------------------------: |
 | ![Main Interface](assets/screenshots/main-en.png) | ![Add Provider](assets/screenshots/add-en.png) |
 
+## Official Release Assets
+
+GitHub Releases publish the Web runtime only.
+
+| Platform | Asset | Run |
+| --- | --- | --- |
+| Windows x86_64 | `cc-switch-web-v{version}-windows-x86_64.exe` | `./cc-switch-web-v{version}-windows-x86_64.exe` |
+| macOS x86_64 | `cc-switch-web-v{version}-macos-x86_64` | `chmod +x ./cc-switch-web-v{version}-macos-x86_64 && ./cc-switch-web-v{version}-macos-x86_64` |
+| Linux x86_64 | `cc-switch-web-v{version}-linux-x86_64-ubuntu20.04` | `chmod +x ./cc-switch-web-v{version}-linux-x86_64-ubuntu20.04 && ./cc-switch-web-v{version}-linux-x86_64-ubuntu20.04` |
+
+### Runtime defaults
+
+- URL: `http://127.0.0.1:17666`
+- Port override: `CC_SWITCH_PORT=8080`
+- Host override: `CC_SWITCH_HOST=0.0.0.0`
+- Linux compatibility baseline: Ubuntu 20.04+
+
+### Platform notes
+
+- Windows: run the `.exe` directly in PowerShell or Command Prompt.
+- macOS: the binary is unsigned. If Gatekeeper blocks it, remove the quarantine attribute and run again.
+- Linux: official assets are built on Ubuntu 20.04 to keep the minimum supported baseline explicit.
+
+```bash
+xattr -d com.apple.quarantine ./cc-switch-web-v{version}-macos-x86_64
+```
+
 ## Local Development
 
 ### Requirements
 
 - Node.js 18+
-- pnpm 8+
+- pnpm 8+ or npm
 - Rust 1.85+
-- Tauri CLI 2.8+
+- Tauri CLI 2.8+ for desktop-only local development
 
 ### Common Commands
 
@@ -37,8 +65,9 @@ This fork is used for local customization and ongoing development. The current c
 # Install dependencies
 pnpm install
 
-# Desktop development
-pnpm dev
+# Web development
+pnpm dev:server
+pnpm dev:web
 
 # Type checking
 pnpm typecheck
@@ -46,23 +75,11 @@ pnpm typecheck
 # Frontend unit tests
 pnpm test:unit
 
-# Desktop build
-pnpm build
+# Build embedded Web frontend
+pnpm build:web
 ```
 
-### Rust Backend
-
-```bash
-cd src-tauri
-
-cargo fmt
-cargo clippy
-cargo test
-```
-
-## Web Mode
-
-### Single-Port Launch
+### Local Web Launch
 
 ```bash
 ./start-web.sh
@@ -91,21 +108,6 @@ To override the runtime directory:
 CC_SWITCH_RUNTIME_DIR=/tmp/cc-switch-web ./start-web.sh
 ```
 
-### Manual Debugging
-
-```bash
-# Start the web backend
-pnpm dev:server
-
-# Start the frontend dev server with hot reload
-pnpm dev:web
-```
-
-Notes:
-
-- `17666`: backend, Web UI, `/api`, `/api/ws`
-- `3000`: Vite dev server only for manual frontend debugging
-
 ### Manual Web Build
 
 ```bash
@@ -113,6 +115,14 @@ pnpm build:web
 cargo build --release --manifest-path crates/server/Cargo.toml
 ./crates/server/target/release/cc-switch-web
 ```
+
+### Local Linux release-parity build
+
+```bash
+./build-web-release.sh
+```
+
+This script emits `release-web/cc-switch-web-v{version}-linux-x86_64-ubuntu20.04`.
 
 ## Tech Stack
 

@@ -9,10 +9,29 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build-web:
-    name: Build CC-Switch Web (Linux x64)
-    runs-on: ubuntu-latest
+    name: Build Web (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x86_64
+            runner: windows-2022
+            asset_suffix: windows-x86_64.exe
+            binary_path: crates/server/target/release/cc-switch-web.exe
+          - label: macOS x86_64
+            runner: macos-13
+            asset_suffix: macos-x86_64
+            binary_path: crates/server/target/release/cc-switch-web
+          - label: Linux x86_64 (Ubuntu 20.04)
+            runner: ubuntu-20.04
+            asset_suffix: linux-x86_64-ubuntu20.04
+            binary_path: crates/server/target/release/cc-switch-web
 
     steps:
       - name: Checkout repository
@@ -23,181 +42,116 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Resolve release metadata
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+
+          ASSET_NAME="cc-switch-web-v${VERSION}-${{ matrix.asset_suffix }}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=$ASSET_NAME" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
+        shell: bash
         run: npm ci
 
       - name: Build frontend (Web mode)
+        shell: bash
         run: npm run build:web
 
       - name: Verify frontend build
+        shell: bash
         run: |
-          if [ ! -f "dist/index.html" ]; then
-            echo "❌ Frontend build failed: dist/index.html not found"
-            exit 1
-          fi
-          echo "✓ Frontend built successfully"
+          test -f dist/index.html
           ls -la dist/
 
       - name: Build backend (Release mode)
+        shell: bash
+        run: cargo build --release --manifest-path crates/server/Cargo.toml
+
+      - name: Create release asset
+        shell: bash
         run: |
-          cargo build --release --manifest-path crates/server/Cargo.toml
-          ls -lah crates/server/target/release/cc-switch-web
+          mkdir -p release-assets
+          cp "${{ matrix.binary_path }}" "release-assets/${ASSET_NAME}"
 
-      - name: Create release package
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          BUILD_DIR="release-web"
-          ARCHIVE_NAME="cc-switch-web-linux-x64-v${VERSION}.tar.gz"
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x "release-assets/${ASSET_NAME}"
+          fi
 
-          mkdir -p "$BUILD_DIR"
+          ls -lah release-assets/
 
-          # Copy binary
-          cp crates/server/target/release/cc-switch-web "$BUILD_DIR/"
-          chmod +x "$BUILD_DIR/cc-switch-web"
-
-          # Create run script
-          cat > "$BUILD_DIR/run.sh" << 'EOF'
-          #!/bin/bash
-          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          cd "$SCRIPT_DIR"
-          export CC_SWITCH_PORT=${CC_SWITCH_PORT:-17666}
-          export CC_SWITCH_HOST=${CC_SWITCH_HOST:-127.0.0.1}
-          ./cc-switch-web "$@"
-          EOF
-          chmod +x "$BUILD_DIR/run.sh"
-
-          # Create systemd service
-          cat > "$BUILD_DIR/cc-switch-web.service" << 'EOF'
-          [Unit]
-          Description=CC-Switch Web Server
-          After=network.target
-
-          [Service]
-          Type=simple
-          User=%i
-          WorkingDirectory=/opt/cc-switch-web
-          ExecStart=/opt/cc-switch-web/cc-switch-web
-          Restart=on-failure
-          RestartSec=5
-          Environment=CC_SWITCH_PORT=17666
-          Environment=CC_SWITCH_HOST=0.0.0.0
-
-          [Install]
-          WantedBy=multi-user.target
-          EOF
-
-          # Create README
-          cat > "$BUILD_DIR/README.md" << 'EOF'
-          # CC-Switch Web Server
-
-          A standalone Web version of CC-Switch for headless/SSH environments.
-
-          ## Quick Start
-
-          ```bash
-          # Run
-          ./cc-switch-web
-
-          # Or use run script
-          ./run.sh
-          ```
-
-          Then open http://localhost:17666 in your browser.
-
-          ## Configuration
-
-          ```bash
-          # Custom port
-          CC_SWITCH_PORT=8080 ./cc-switch-web
-
-          # Listen on all interfaces
-          CC_SWITCH_HOST=0.0.0.0 ./cc-switch-web
-
-          # Authentication token (optional)
-          CC_SWITCH_AUTH_TOKEN=your-secret ./cc-switch-web
-          ```
-
-          ## System Service
-
-          ```bash
-          sudo mkdir -p /opt/cc-switch-web
-          sudo cp cc-switch-web run.sh /opt/cc-switch-web/
-          sudo chmod +x /opt/cc-switch-web/*
-          sudo cp cc-switch-web.service /etc/systemd/system/
-          sudo systemctl daemon-reload
-          sudo systemctl enable cc-switch-web
-          sudo systemctl start cc-switch-web
-          ```
-
-          ## Data Location
-
-          - Database: `~/.cc-switch/cc-switch.db`
-          - Settings: `~/.cc-switch/settings.json`
-          - Claude config: `~/.claude.json`
-
-          ## More Info
-
-          Visit https://github.com/farion1231/cc-switch for full documentation.
-          EOF
-
-          # Create archive
-          tar -czf "$ARCHIVE_NAME" -C "$BUILD_DIR" .
-
-          # Output info
-          BINARY_SIZE=$(du -h "$BUILD_DIR/cc-switch-web" | cut -f1)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
-          echo "BINARY_SIZE=$BINARY_SIZE" >> $GITHUB_ENV
-
-          echo "::notice::Build complete - Binary: $BINARY_SIZE, Archive: $ARCHIVE_NAME"
-
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cc-switch-web-linux-x64
-          path: cc-switch-web-linux-x64-*.tar.gz
+          name: ${{ matrix.asset_suffix }}
+          path: release-assets/
           retention-days: 7
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+  release:
+    name: Publish Web release assets
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: cc-switch-web-linux-x64-*.tar.gz
-          body: |
-            ## CC-Switch Web Version v${{ env.VERSION }}
+          path: release-assets
+          merge-multiple: true
 
-            **For headless/SSH server environments**
+      - name: Restore executable bits
+        shell: bash
+        run: |
+          chmod +x release-assets/cc-switch-web-v${GITHUB_REF_NAME#v}-macos-x86_64
+          chmod +x release-assets/cc-switch-web-v${GITHUB_REF_NAME#v}-linux-x86_64-ubuntu20.04
+          ls -lah release-assets/
 
-            ### What's Included
-            - Single binary (x86_64 Linux, ~${{ env.BINARY_SIZE }})
-            - Embedded React frontend
-            - WebSocket + JSON-RPC 2.0 API
-            - Zero external dependencies
+      - name: Create release notes
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            printf '## CC-Switch Web v%s\n\n' "$VERSION"
+            printf '%s\n\n' 'Official GitHub Releases now publish the Web runtime only.'
+            printf '%s\n' '### Assets'
+            printf -- '- Windows x86_64: `cc-switch-web-v%s-windows-x86_64.exe`\n' "$VERSION"
+            printf -- '- macOS x86_64: `cc-switch-web-v%s-macos-x86_64`\n' "$VERSION"
+            printf -- '- Linux x86_64 baseline: `cc-switch-web-v%s-linux-x86_64-ubuntu20.04` (built on Ubuntu 20.04)\n\n' "$VERSION"
+            printf '%s\n' '### Quick start'
+            printf -- '- Windows: run `cc-switch-web-v%s-windows-x86_64.exe`\n' "$VERSION"
+            printf -- '- macOS: `chmod +x ./cc-switch-web-v%s-macos-x86_64 && ./cc-switch-web-v%s-macos-x86_64`\n' "$VERSION" "$VERSION"
+            printf -- '- Linux: `chmod +x ./cc-switch-web-v%s-linux-x86_64-ubuntu20.04 && ./cc-switch-web-v%s-linux-x86_64-ubuntu20.04`\n\n' "$VERSION" "$VERSION"
+            printf '%s\n' '### Runtime configuration'
+            printf '%s\n' '- Default address: `http://127.0.0.1:17666`'
+            printf '%s\n' '- Override port: `CC_SWITCH_PORT=8080`'
+            printf '%s\n\n' '- Override host: `CC_SWITCH_HOST=0.0.0.0`'
+            printf '%s\n' 'Desktop Tauri packages are not part of this release.'
+          } > release-notes.md
 
-            ### Quick Start
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.ARCHIVE_NAME }}
-            tar -xzf ${{ env.ARCHIVE_NAME }}
-            cd cc-switch-web
-            ./cc-switch-web
-            ```
-
-            Then open http://localhost:17666
-
-            ### Features
-            - ✅ All desktop features available
-            - ✅ Auto port selection on conflict
-            - ✅ Shares data with desktop version
-            - ✅ systemd service support
-
-            See [README](https://github.com/${{ github.repository }}#web-version-headless--ssh-server) for full documentation.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          body_path: release-notes.md
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
