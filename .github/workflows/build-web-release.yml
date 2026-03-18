@@ -18,21 +18,9 @@ env:
   PNPM_VERSION: 10.10.0
 
 jobs:
-  build-web-hosted:
-    name: Build Web (${{ matrix.label }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Windows x86_64
-            runner: windows-2022
-            asset_suffix: windows-x86_64.exe
-            binary_path: crates/server/target/release/cc-switch-web.exe
-          - label: macOS x86_64
-            runner: macos-13
-            asset_suffix: macos-x86_64
-            binary_path: crates/server/target/release/cc-switch-web
+  build-web-windows:
+    name: Build Web (Windows x86_64)
+    runs-on: windows-2022
 
     steps:
       - name: Checkout repository
@@ -71,7 +59,7 @@ jobs:
             VERSION="$(node -p "require('./package.json').version")"
           fi
 
-          ASSET_NAME="cc-switch-web-v${VERSION}-${{ matrix.asset_suffix }}"
+          ASSET_NAME="cc-switch-web-v${VERSION}-windows-x86_64.exe"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ASSET_NAME=$ASSET_NAME" >> "$GITHUB_ENV"
 
@@ -97,18 +85,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-          cp "${{ matrix.binary_path }}" "release-assets/${ASSET_NAME}"
-
-          if [[ "${{ runner.os }}" != "Windows" ]]; then
-            chmod +x "release-assets/${ASSET_NAME}"
-          fi
-
+          cp crates/server/target/release/cc-switch-web.exe "release-assets/${ASSET_NAME}"
           ls -lah release-assets/
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_suffix }}
+          name: windows-x86_64
           path: release-assets/
           retention-days: 7
 
@@ -208,7 +191,7 @@ jobs:
     name: Publish Web release assets
     if: startsWith(github.ref, 'refs/tags/')
     needs:
-      - build-web-hosted
+      - build-web-windows
       - build-web-linux
     runs-on: ubuntu-latest
 
@@ -222,7 +205,6 @@ jobs:
       - name: Restore executable bits
         shell: bash
         run: |
-          chmod +x release-assets/cc-switch-web-v${GITHUB_REF_NAME#v}-macos-x86_64
           chmod +x release-assets/cc-switch-web-v${GITHUB_REF_NAME#v}-linux-x86_64-ubuntu20.04
           ls -lah release-assets/
 
@@ -235,11 +217,9 @@ jobs:
             printf '%s\n\n' 'Official GitHub Releases now publish the Web runtime only.'
             printf '%s\n' '### Assets'
             printf -- '- Windows x86_64: `cc-switch-web-v%s-windows-x86_64.exe`\n' "$VERSION"
-            printf -- '- macOS x86_64: `cc-switch-web-v%s-macos-x86_64`\n' "$VERSION"
             printf -- '- Linux x86_64 baseline: `cc-switch-web-v%s-linux-x86_64-ubuntu20.04` (built in an Ubuntu 20.04 container on an ubuntu-22.04 runner)\n\n' "$VERSION"
             printf '%s\n' '### Quick start'
             printf -- '- Windows: run `cc-switch-web-v%s-windows-x86_64.exe`\n' "$VERSION"
-            printf -- '- macOS: `chmod +x ./cc-switch-web-v%s-macos-x86_64 && ./cc-switch-web-v%s-macos-x86_64`\n' "$VERSION" "$VERSION"
             printf -- '- Linux: `chmod +x ./cc-switch-web-v%s-linux-x86_64-ubuntu20.04 && ./cc-switch-web-v%s-linux-x86_64-ubuntu20.04`\n\n' "$VERSION" "$VERSION"
             printf '%s\n' '### Runtime configuration'
             printf '%s\n' '- Default address: `http://127.0.0.1:17666`'
@@ -251,9 +231,10 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
           files: release-assets/*
           body_path: release-notes.md
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
