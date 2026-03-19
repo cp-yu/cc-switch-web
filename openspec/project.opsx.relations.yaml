@@ -1,0 +1,110 @@
+schema_version: 1
+relations:
+  - from: cap.assets.mcp
+    type: contains
+    to: dom.assets
+  - from: cap.assets.prompts
+    type: contains
+    to: dom.assets
+  - from: cap.assets.skills
+    type: contains
+    to: dom.assets
+  - from: cap.providers.catalog
+    type: contains
+    to: dom.providers
+  - from: cap.providers.switch
+    type: contains
+    to: dom.providers
+  - from: cap.providers.universal
+    type: contains
+    to: dom.providers
+  - from: cap.providers.switch
+    type: depends_on
+    to: cap.providers.catalog
+  - from: cap.providers.universal
+    type: depends_on
+    to: cap.providers.catalog
+  - from: cap.proxy.control
+    type: contains
+    to: dom.proxy
+  - from: cap.proxy.resilience
+    type: contains
+    to: dom.proxy
+  - from: cap.proxy.usage
+    type: contains
+    to: dom.proxy
+  - from: cap.proxy.control
+    type: depends_on
+    to: dom.providers
+  - from: cap.proxy.resilience
+    type: depends_on
+    to: cap.proxy.control
+  - from: cap.proxy.usage
+    type: depends_on
+    to: dom.providers
+  - from: cap.proxy.usage
+    type: depends_on
+    to: cap.proxy.control
+  - from: cap.runtime.shell
+    type: contains
+    to: dom.runtime
+  - from: cap.runtime.commands
+    type: contains
+    to: dom.runtime
+  - from: cap.runtime.web
+    type: contains
+    to: dom.runtime
+  - from: cap.runtime.commands
+    type: depends_on
+    to: dom.providers
+  - from: cap.runtime.commands
+    type: depends_on
+    to: dom.assets
+  - from: cap.runtime.commands
+    type: depends_on
+    to: dom.proxy
+  - from: cap.runtime.commands
+    type: depends_on
+    to: dom.workspace
+  - from: cap.runtime.commands
+    type: depends_on
+    to: dom.settings
+  - from: cap.runtime.web
+    type: depends_on
+    to: cap.runtime.shell
+  - from: cap.runtime.web
+    type: depends_on
+    to: cap.runtime.commands
+  - from: cap.settings.preferences
+    type: contains
+    to: dom.settings
+  - from: cap.settings.backup
+    type: contains
+    to: dom.settings
+  - from: cap.settings.sync
+    type: contains
+    to: dom.settings
+  - from: cap.settings.backup
+    type: depends_on
+    to: dom.providers
+  - from: cap.settings.backup
+    type: depends_on
+    to: dom.assets
+  - from: cap.settings.sync
+    type: depends_on
+    to: cap.settings.preferences
+  - from: cap.workspace.memory
+    type: contains
+    to: dom.workspace
+  - from: cap.workspace.sessions
+    type: contains
+    to: dom.workspace
+  - from: cap.workspace.openclaw
+    type: contains
+    to: dom.workspace
+  - from: cap.workspace.openclaw
+    type: depends_on
+    to: dom.providers
+  - from: cap.workspace.sessions
+    type: depends_on
+    to: cap.workspace.memory

@@ -1,0 +1,102 @@
+schema_version: 1
+project:
+  id: cc-switch
+  name: CC Switch Fork
+domains:
+  - id: dom.assets
+    type: domain
+    intent: Agent-facing assets management for MCP servers, prompts, and skills.
+    status: active
+  - id: dom.providers
+    type: domain
+    intent: Multi-app provider configuration, switching, and live synchronization.
+    status: active
+  - id: dom.proxy
+    type: domain
+    intent: Request proxying, provider adapters, failover, and usage or health observability.
+    status: active
+  - id: dom.runtime
+    type: domain
+    intent: Runtime shell that hosts the React UI, Tauri command surface, and embedded Web delivery.
+    status: active
+  - id: dom.settings
+    type: domain
+    intent: Application settings, backup or import-export, WebDAV sync, and deep-link based configuration transfer.
+    status: active
+  - id: dom.workspace
+    type: domain
+    intent: Workspace, session, and OpenClaw runtime operations for persisted local agent context.
+    status: active
+capabilities:
+  - id: cap.assets.mcp
+    type: capability
+    intent: Manage MCP server definitions, enablement, and app sync.
+    status: active
+  - id: cap.assets.prompts
+    type: capability
+    intent: Manage prompts, prompt enablement, and prompt file import.
+    status: active
+  - id: cap.assets.skills
+    type: capability
+    intent: Install, import, toggle, and discover skills across supported apps.
+    status: active
+  - id: cap.providers.catalog
+    type: capability
+    intent: List, add, update, delete, and order providers per supported app.
+    status: active
+  - id: cap.providers.switch
+    type: capability
+    intent: Switch the active provider and import live defaults into managed state.
+    status: active
+  - id: cap.providers.universal
+    type: capability
+    intent: Manage universal provider definitions and synchronize them into app-specific configs.
+    status: active
+  - id: cap.proxy.control
+    type: capability
+    intent: Start, stop, configure, and take over the proxy path for supported apps.
+    status: active
+  - id: cap.proxy.resilience
+    type: capability
+    intent: Switch upstream providers and enforce failover or circuit-breaker behavior.
+    status: active
+  - id: cap.proxy.usage
+    type: capability
+    intent: Collect usage, pricing, request logs, and provider health signals.
+    status: active
+  - id: cap.runtime.shell
+    type: capability
+    intent: Route top-level views and host the frontend application shell.
+    status: active
+  - id: cap.runtime.commands
+    type: capability
+    intent: Register and expose the backend command surface consumed by the UI.
+    status: active
+  - id: cap.runtime.web
+    type: capability
+    intent: Serve the embedded SPA and API endpoints for the Web runtime.
+    status: active
+  - id: cap.settings.preferences
+    type: capability
+    intent: Read and persist application settings, runtime toggles, and local config paths.
+    status: active
+  - id: cap.settings.backup
+    type: capability
+    intent: Export, import, create, list, and restore persisted application data.
+    status: active
+  - id: cap.settings.sync
+    type: capability
+    intent: Synchronize configuration through WebDAV and deep-link based import flows.
+    status: active
+  - id: cap.workspace.memory
+    type: capability
+    intent: Persist workspace files and daily memory documents for local agent context.
+    status: active
+  - id: cap.workspace.sessions
+    type: capability
+    intent: Browse sessions, inspect messages, and launch session terminals.
+    status: active
+  - id: cap.workspace.openclaw
+    type: capability
+    intent: Manage OpenClaw defaults, environment, tools, and health checks.
+    status: active

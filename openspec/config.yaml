@@ -1,0 +1,36 @@
+schema: spec-driven
+
+# OpenSpec document prose language (optional)
+# Applies only to natural-language body text in artifacts.
+# Keep template headings, IDs, schema keys, commands, and code tokens unchanged.
+# Example:
+#   docLanguage: zh-CN
+docLanguage: 中文
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+context: |
+  Project: cc-switch / CC Switch Fork
+  Product scope: unified configuration manager for Claude Code, Codex, Gemini, OpenCode, and OpenClaw, including providers, MCP servers, prompts, skills, proxy, failover, usage, sessions, and workspace flows.
+  Runtime boundaries: official GitHub releases ship the single-binary Web runtime; Tauri desktop code stays in-repo for local development and feature parity.
+  Tech stack: frontend uses React 18 + TypeScript + Vite + TailwindCSS + TanStack Query; desktop backend uses Rust + Tauri 2; web runtime uses Rust + Axum + WebSocket; shared logic lives in crates/core.
+  Persistence model: managed application data is centered on ~/.cc-switch with SQLite plus JSON/config files; web and desktop flows are expected to share the same underlying state.
+  Architecture reference: use openspec/project.opsx.yaml plus openspec/project.opsx.relations.yaml and openspec/project.opsx.code-map.yaml as the authoritative architecture map; use openspec/specs/README.md to map spec slugs to cap.* capability IDs.
+  Documentation contract: natural-language prose should be written in 中文, but headings, IDs, schema keys, commands, relation types, and code identifiers stay canonical.
+  Change discipline: keep designs small, auditable, and grounded in repository evidence; prefer capability-level deltas over broad cross-cutting rewrites unless the code truly forces it.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
