@@ -1,0 +1,4 @@
+interface:
+  display_name: "CC Switch Release"
+  short_description: "Sync versions and cut cc-switch releases safely"
+  default_prompt: "Use $cc-switch-release to sync versions, create a release commit, tag, push, and verify GitHub release state for this repo."
