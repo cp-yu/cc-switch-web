@@ -54,7 +54,7 @@ const resources = {
   },
 };
 
-i18n.use(initReactI18next).init({
+export const i18nReady = i18n.use(initReactI18next).init({
   resources,
   lng: getInitialLanguage(), // 根据本地存储或系统语言选择默认语言
   fallbackLng: "en", // 如果缺少中文翻译则退回英文

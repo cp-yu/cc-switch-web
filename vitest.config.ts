@@ -7,6 +7,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@platform/bootstrap": path.resolve(__dirname, "./src/platform/bootstrap.web.ts"),
+      "@platform/transport-impl": path.resolve(
+        __dirname,
+        "./src/lib/transport/transport.impl.tauri.ts",
+      ),
+      "@platform/updater-impl": path.resolve(__dirname, "./src/lib/updater.web.ts"),
+      "@platform/platform-paths-impl": path.resolve(
+        __dirname,
+        "./src/lib/platform-paths.web.ts",
+      ),
     },
   },
   test: {

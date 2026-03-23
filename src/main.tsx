@@ -8,6 +8,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import { Toaster } from "@/components/ui/sonner";
+import { i18nReady } from "@/i18n";
 import { listen, invoke } from "@/lib/transport";
 import {
   handleFatalConfigLoadError,
@@ -25,15 +26,17 @@ try {
   // 忽略平台检测失败
 }
 
-try {
-  void listen<ConfigLoadErrorPayload | null>("configLoadError", async (payload) => {
-    await handleFatalConfigLoadError(payload);
-  });
-} catch (e) {
-  console.error("订阅 configLoadError 事件失败", e);
-}
-
 async function bootstrap() {
+  await i18nReady;
+
+  try {
+    await listen<ConfigLoadErrorPayload | null>("configLoadError", async (payload) => {
+      await handleFatalConfigLoadError(payload);
+    });
+  } catch (e) {
+    console.error("订阅 configLoadError 事件失败", e);
+  }
+
   try {
     const initError = (await invoke(
       "get_init_error",
@@ -62,4 +65,6 @@ async function bootstrap() {
   );
 }
 
-void bootstrap();
+void bootstrap().catch((e) => {
+  console.error("应用引导失败", e);
+});

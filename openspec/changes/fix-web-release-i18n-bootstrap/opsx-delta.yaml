@@ -1,0 +1,22 @@
+schema_version: 1
+change:
+  name: fix-web-release-i18n-bootstrap
+  summary: Require the official Web runtime to initialize frontend localization before rendering user-facing UI.
+capabilities:
+  MODIFIED:
+    - id: cap.runtime.web
+      spec_slug: web-runtime-delivery
+      domain: dom.runtime
+      merge_intent: >
+        Tighten Web runtime delivery so official web-release builds bootstrap
+        localization before rendering translation-bound UI, preventing raw i18n
+        keys or interpolation templates from leaking to users.
+code_refs:
+  - path: src/main.tsx
+    intent: Make frontend localization initialization unconditional for all build modes.
+  - path: src/platform/bootstrap.web.ts
+    intent: Keep web bootstrap focused on platform-specific fatal-config behavior, not hidden localization side effects.
+  - path: src/platform/bootstrap.tauri.ts
+    intent: Remove platform-only responsibility for triggering localization initialization once the entrypoint owns it.
+  - path: src/i18n/index.ts
+    intent: Preserve the single source of translation resources and language selection logic.
