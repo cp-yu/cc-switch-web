@@ -8,7 +8,7 @@ name = "cc-switch-web"
 path = "src/main.rs"
 
 [dependencies]
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.7", features = ["multipart", "ws"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.21"
 futures = "0.3"
@@ -28,3 +28,7 @@ bcrypt = "0.15"
 rand = "0.8"
 hex = "0.4"
 dirs = "5"
+
+[dev-dependencies]
+cc_switch = { path = "../../src-tauri", package = "cc-switch", default-features = false, features = ["headless"] }
+tower = { version = "0.5", features = ["util"] }

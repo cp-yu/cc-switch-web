@@ -12,6 +12,7 @@ mod error;
 mod gemini_config;
 mod gemini_mcp;
 mod init_status;
+mod import_export_support;
 mod mcp;
 mod openclaw_config;
 mod opencode_config;
@@ -87,6 +88,7 @@ pub use services::{
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
     SkillService, SpeedtestService,
 };
+pub use import_export_support::*;
 pub use session_manager::{SessionMessage, SessionMeta};
 pub use settings::{
     get_settings, get_webdav_sync_settings, reload_settings, set_webdav_sync_settings,

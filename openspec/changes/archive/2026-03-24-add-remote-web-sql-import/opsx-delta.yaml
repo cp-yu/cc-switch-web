@@ -1,0 +1,35 @@
+schema_version: 1
+change:
+  name: add-remote-web-sql-import
+  summary: Add authenticated browser-based SQL import and export for the Web runtime, while requiring a stable remote-access host/port contract.
+capabilities:
+  MODIFIED:
+    - id: cap.settings.backup
+      spec_slug: settings-backup
+      domain: dom.settings
+      merge_intent: >
+        Extend configuration import/export so Web runtime users can upload and
+        download CC Switch SQL backups from a browser while preserving the
+        existing desktop path-based flow, SQL validation, safety backup, and
+        post-import refresh semantics.
+    - id: cap.runtime.web
+      spec_slug: web-runtime-delivery
+      domain: dom.runtime
+      merge_intent: >
+        Tighten remote Web runtime delivery so non-loopback deployments keep a
+        stable configured host and port, and expose the SQL upload/download
+        surface on the same authenticated single-port HTTP service as the Web
+        UI.
+code_refs:
+  - path: src/hooks/useImportExport.ts
+    intent: Split desktop path import/export state from Web browser upload/download state.
+  - path: src/components/settings/ImportExportSection.tsx
+    intent: Render Web-friendly upload and download interactions without relying on desktop file-path assumptions.
+  - path: src/lib/api/settings.ts
+    intent: Add browser upload/download API paths alongside the existing desktop import/export helpers.
+  - path: src-tauri/src/database/backup.rs
+    intent: Reuse shared SQL import/export semantics across desktop and Web paths.
+  - path: crates/server/src/main.rs
+    intent: Serve the authenticated SQL upload/download routes and enforce stable remote-access port behavior.
+  - path: crates/server/src/api/invoke.rs
+    intent: Reuse existing session-auth expectations so Web SQL import/export remains protected like other non-public operations.

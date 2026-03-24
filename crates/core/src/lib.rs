@@ -9,8 +9,9 @@ use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
 use cc_switch::{
-    AppError, AppSettings, AppState, AppType, Database, EndpointLatency, McpServer, Provider,
-    ProviderService, SkillService, SpeedtestService,
+    default_sql_export_file_name, export_database_sql, export_database_to_file,
+    import_database_with_sync, AppError, AppSettings, AppState, AppType, Database,
+    EndpointLatency, McpServer, Provider, ProviderService, SkillService, SpeedtestService,
 };
 use chrono::Utc;
 use indexmap::IndexMap;
@@ -57,6 +58,14 @@ impl CoreContext {
     /// 获取应用状态（包含数据库）
     pub fn app_state(&self) -> &AppState {
         &self.app_state
+    }
+
+    pub fn from_app_state(app_state: AppState) -> Self {
+        let skill_service = Some(Arc::new(SkillService::new()));
+        Self {
+            app_state,
+            skill_service,
+        }
     }
 
     /// 获取 SkillService（如果初始化成功）
@@ -699,9 +708,7 @@ pub fn export_config_to_file(
     file_path: &str,
 ) -> Result<serde_json::Value, String> {
     let target_path = std::path::PathBuf::from(file_path);
-    ctx.app_state()
-        .db
-        .export_sql(&target_path)
+    export_database_to_file(ctx.app_state().db.clone(), &target_path)
         .map_err(|e| e.to_string())?;
     Ok(serde_json::json!({
         "success": true,
@@ -710,41 +717,30 @@ pub fn export_config_to_file(
     }))
 }
 
+pub fn export_config_as_sql(ctx: &CoreContext) -> Result<(String, Vec<u8>), String> {
+    let file_name = default_sql_export_file_name();
+    let sql = export_database_sql(ctx.app_state().db.clone()).map_err(|e| e.to_string())?;
+    Ok((file_name, sql.into_bytes()))
+}
+
 /// 从文件导入配置
 pub fn import_config_from_file(
     ctx: &CoreContext,
     file_path: &str,
 ) -> Result<serde_json::Value, String> {
     let path_buf = std::path::PathBuf::from(file_path);
-    let backup_id = ctx
-        .app_state()
-        .db
-        .import_sql(&path_buf)
-        .map_err(|e| e.to_string())?;
+    import_database_with_sync(ctx.app_state().db.clone(), |db| db.import_sql(&path_buf))
+        .map_err(|e| e.to_string())
+}
 
-    let warning = match ProviderService::sync_current_to_live(ctx.app_state()) {
-        Ok(()) => match cc_switch::reload_settings() {
-            Ok(()) => None,
-            Err(err) => Some(format!("Post-operation synchronization failed: {err}")),
-        },
-        Err(err) => Some(format!("Post-operation synchronization failed: {err}")),
-    };
-
-    if let Some(msg) = warning.as_ref() {
-        log::warn!("[Import] post-import sync warning: {msg}");
-    }
-
-    let mut result = serde_json::json!({
-        "success": true,
-        "message": "SQL imported successfully",
-        "backupId": backup_id
-    });
-    if let Some(msg) = warning {
-        if let Some(obj) = result.as_object_mut() {
-            obj.insert("warning".to_string(), serde_json::Value::String(msg));
-        }
-    }
-    Ok(result)
+pub fn import_config_from_sql_bytes(
+    ctx: &CoreContext,
+    sql_bytes: &[u8],
+) -> Result<serde_json::Value, String> {
+    let sql_content =
+        std::str::from_utf8(sql_bytes).map_err(|e| format!("SQL 文件编码无效: {e}"))?;
+    import_database_with_sync(ctx.app_state().db.clone(), |db| db.import_sql_string(sql_content))
+        .map_err(|e| e.to_string())
 }
 
 /// 同步当前供应商到 live 配置

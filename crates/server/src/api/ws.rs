@@ -12,35 +12,17 @@ use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 
-use crate::rpc::{RpcRequest, RpcResponse, RpcError};
+use crate::rpc::{RpcError, RpcRequest, RpcResponse};
 use crate::state::ServerState;
-use super::dispatch::dispatch_command;
 
-/// Cookie name for web session authentication
-const SESSION_COOKIE_NAME: &str = "cc-switch-session";
+use super::{
+    dispatch::dispatch_command,
+    session_auth::has_valid_session,
+};
 
 /// Protocol-only WebSocket methods that do not participate in business command dispatch.
 pub const WS_PROTOCOL_METHODS: &[&str] = &["event.subscribe", "event.unsubscribe", "ping"];
 
-/// Extract session token from cookie header
-fn extract_session_cookie(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get(axum::http::header::COOKIE)?
-        .to_str()
-        .ok()?
-        .split(';')
-        .find_map(|cookie| {
-            let cookie = cookie.trim();
-            if cookie.starts_with(SESSION_COOKIE_NAME) {
-                cookie
-                    .strip_prefix(SESSION_COOKIE_NAME)
-                    .and_then(|s| s.strip_prefix('='))
-                    .map(|s| s.to_string())
-            } else {
-                None
-            }
-        })
-}
 
 #[derive(Deserialize)]
 pub struct WsAuthQuery {
@@ -77,12 +59,7 @@ pub async fn upgrade_handler(
 
     // Check cookie auth (web authentication)
     if state.auth_config.is_some() {
-        let session_token = extract_session_cookie(&headers);
-        let is_valid = session_token
-            .map(|token| state.session_store.validate_session(&token))
-            .unwrap_or(false);
-
-        if !is_valid {
+        if !has_valid_session(&state, &headers) {
             return StatusCode::UNAUTHORIZED.into_response();
         }
     }

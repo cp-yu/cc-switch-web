@@ -10,12 +10,15 @@ vi.mock("react-i18next", () => ({
 
 describe("ImportExportSection Component", () => {
   const baseProps = {
+    importMode: "desktop" as const,
     status: "idle" as const,
     selectedFile: "",
     errorMessage: null,
     backupId: null,
     isImporting: false,
+    isExporting: false,
     onSelectFile: vi.fn(),
+    onSelectUploadFile: vi.fn(),
     onImport: vi.fn(),
     onExport: vi.fn(),
     onClear: vi.fn(),
@@ -24,15 +27,15 @@ describe("ImportExportSection Component", () => {
   beforeEach(() => {
     tMock.mockImplementation((key: string) => key);
     baseProps.onSelectFile.mockReset();
+    baseProps.onSelectUploadFile.mockReset();
     baseProps.onImport.mockReset();
     baseProps.onExport.mockReset();
     baseProps.onClear.mockReset();
   });
 
-  it("should disable import button and show placeholder when no file selected", () => {
+  it("shows desktop import button and opens file dialog when no file is selected", () => {
     render(<ImportExportSection {...baseProps} />);
 
-    // When no file selected, button shows "selectConfigFile" and clicking it opens file dialog
     expect(
       screen.getByRole("button", { name: /settings\.selectConfigFile/ }),
     ).toBeInTheDocument();
@@ -47,15 +50,15 @@ describe("ImportExportSection Component", () => {
     expect(baseProps.onSelectFile).toHaveBeenCalledTimes(1);
   });
 
-  it("should show filename and enable import/clear when file is selected", () => {
+  it("shows filename and enables desktop import/clear when file is selected", () => {
     render(
       <ImportExportSection
         {...baseProps}
-        selectedFile={"/tmp/test/config.json"}
+        selectedFile="/tmp/test/config.sql"
       />,
     );
 
-    expect(screen.getByText(/config\.json/)).toBeInTheDocument();
+    expect(screen.getByText(/config\.sql/)).toBeInTheDocument();
     const importButton = screen.getByRole("button", {
       name: /settings\.import/,
     });
@@ -67,11 +70,32 @@ describe("ImportExportSection Component", () => {
     expect(baseProps.onClear).toHaveBeenCalledTimes(1);
   });
 
-  it("should show loading text and disable import button during import", () => {
+  it("renders web upload controls and allows browser export", () => {
     render(
       <ImportExportSection
         {...baseProps}
-        selectedFile={"/tmp/test/config.json"}
+        importMode="web"
+        selectedFile="upload.sql"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "settings.import" }),
+    ).toBeEnabled();
+    const exportButton = screen.getByRole("button", {
+      name: "settings.exportConfig",
+    });
+    expect(exportButton).toBeEnabled();
+    fireEvent.click(exportButton);
+    expect(baseProps.onExport).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/upload\.sql/)).toBeInTheDocument();
+  });
+
+  it("shows loading text and disables import button during import", () => {
+    render(
+      <ImportExportSection
+        {...baseProps}
+        selectedFile="/tmp/test/config.sql"
         isImporting
         status="importing"
       />,
@@ -85,11 +109,24 @@ describe("ImportExportSection Component", () => {
     expect(screen.getByText("common.loading")).toBeInTheDocument();
   });
 
-  it("should display backup information on successful import", () => {
+  it("shows exporting text and disables export button during export", () => {
     render(
       <ImportExportSection
         {...baseProps}
-        selectedFile={"/tmp/test/config.json"}
+        isExporting
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "settings.exporting" }),
+    ).toBeDisabled();
+  });
+
+  it("displays backup information on successful import", () => {
+    render(
+      <ImportExportSection
+        {...baseProps}
+        selectedFile="/tmp/test/config.sql"
         status="success"
         backupId="backup-001"
       />,
@@ -100,7 +137,7 @@ describe("ImportExportSection Component", () => {
     expect(screen.getByText("settings.autoReload")).toBeInTheDocument();
   });
 
-  it("should display error message when import fails", () => {
+  it("displays error message when import fails", () => {
     render(
       <ImportExportSection
         {...baseProps}

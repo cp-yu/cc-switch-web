@@ -2,11 +2,19 @@ import { invoke } from "@/lib/transport";
 import type { Settings, WebDavSyncSettings, RemoteSnapshotInfo } from "@/types";
 import type { AppId } from "./types";
 
+const API_BASE = import.meta.env.VITE_CC_SWITCH_API_BASE || "/api";
+
 export interface ConfigTransferResult {
   success: boolean;
   message: string;
   filePath?: string;
   backupId?: string;
+  warning?: string;
+}
+
+export interface ConfigDownloadResult {
+  blob: Blob;
+  fileName: string;
 }
 
 export interface WebDavTestResult {
@@ -16,6 +24,42 @@ export interface WebDavTestResult {
 
 export interface WebDavSyncResult {
   status: string;
+}
+
+function buildExportStamp(date = new Date()): string {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}_${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}${String(date.getSeconds()).padStart(2, "0")}`;
+}
+
+export function buildDefaultExportFileName(date = new Date()): string {
+  return `cc-switch-export-${buildExportStamp(date)}.sql`;
+}
+
+function extractDownloadFileName(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+
+  const quotedMatch = /filename="([^"]+)"/i.exec(contentDisposition);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = /filename=([^;]+)/i.exec(contentDisposition);
+  return plainMatch?.[1]?.trim() ?? null;
+}
+
+async function extractErrorMessage(response: Response): Promise<string> {
+  const result = (await response.json().catch(() => null)) as
+    | { message?: string }
+    | null;
+  return result?.message || `Request failed with status ${response.status}`;
 }
 
 export const settingsApi = {
@@ -98,8 +142,48 @@ export const settingsApi = {
     return await invoke("export_config_to_file", { filePath });
   },
 
+  async exportConfigForDownload(): Promise<ConfigDownloadResult> {
+    const response = await fetch(`${API_BASE}/export-config`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(await extractErrorMessage(response));
+    }
+
+    const blob = await response.blob();
+    const fileName =
+      extractDownloadFileName(response.headers.get("content-disposition")) ||
+      buildDefaultExportFileName();
+
+    return { blob, fileName };
+  },
+
   async importConfigFromFile(filePath: string): Promise<ConfigTransferResult> {
     return await invoke("import_config_from_file", { filePath });
+  },
+
+  async importConfigFromUpload(file: File): Promise<ConfigTransferResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${API_BASE}/import-config`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    const result = (await response.json().catch(() => null)) as
+      | ConfigTransferResult
+      | { message?: string }
+      | null;
+
+    if (!response.ok) {
+      throw new Error(result?.message || `Upload failed with status ${response.status}`);
+    }
+
+    return result as ConfigTransferResult;
   },
 
   // ─── WebDAV sync ──────────────────────────────────────────
@@ -132,9 +216,7 @@ export const settingsApi = {
     });
   },
 
-  async webdavSyncFetchRemoteInfo(): Promise<
-    RemoteSnapshotInfo | { empty: true }
-  > {
+  async webdavSyncFetchRemoteInfo(): Promise<RemoteSnapshotInfo | null> {
     return await invoke("webdav_sync_fetch_remote_info");
   },
 
@@ -221,14 +303,13 @@ export interface RectifierConfig {
 
 export interface OptimizerConfig {
   enabled: boolean;
-  thinkingOptimizer: boolean;
-  cacheInjection: boolean;
-  cacheTtl: string;
+  effort: "low" | "medium" | "high";
 }
 
 export interface LogConfig {
   enabled: boolean;
-  level: "error" | "warn" | "info" | "debug" | "trace";
+  maxFiles?: number;
+  maxFileSizeMb?: number;
 }
 
 export interface BackupEntry {

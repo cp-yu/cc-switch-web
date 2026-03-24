@@ -4,6 +4,11 @@ import { server } from "./server";
 
 const TAURI_ENDPOINT = "http://tauri.local";
 
+Object.defineProperty(globalThis, "__TAURI__", {
+  value: {},
+  configurable: true,
+});
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: async (command: string, payload: Record<string, unknown> = {}) => {
     const response = await fetch(`${TAURI_ENDPOINT}/${command}`, {

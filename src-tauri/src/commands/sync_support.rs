@@ -7,7 +7,7 @@ use crate::services::provider::ProviderService;
 use crate::settings;
 use crate::store::AppState;
 
-pub(crate) fn run_post_import_sync(db: Arc<Database>) -> Result<(), AppError> {
+pub fn run_post_import_sync(db: Arc<Database>) -> Result<(), AppError> {
     let app_state = AppState::new(db);
     ProviderService::sync_current_to_live(&app_state)?;
     settings::reload_settings()?;
@@ -23,7 +23,7 @@ fn post_sync_warning<E: std::fmt::Display>(err: E) -> String {
     .to_string()
 }
 
-pub(crate) fn post_sync_warning_from_result(
+pub fn post_sync_warning_from_result(
     result: Result<Result<(), AppError>, String>,
 ) -> Option<String> {
     match result {
@@ -33,7 +33,7 @@ pub(crate) fn post_sync_warning_from_result(
     }
 }
 
-pub(crate) fn attach_warning(mut value: Value, warning: Option<String>) -> Value {
+pub fn attach_warning(mut value: Value, warning: Option<String>) -> Value {
     if let Some(message) = warning {
         if let Some(obj) = value.as_object_mut() {
             obj.insert("warning".to_string(), Value::String(message));
@@ -42,7 +42,7 @@ pub(crate) fn attach_warning(mut value: Value, warning: Option<String>) -> Value
     value
 }
 
-pub(crate) fn success_payload_with_warning(backup_id: String, warning: Option<String>) -> Value {
+pub fn success_payload_with_warning(backup_id: String, warning: Option<String>) -> Value {
     attach_warning(
         json!({
             "success": true,
@@ -51,6 +51,19 @@ pub(crate) fn success_payload_with_warning(backup_id: String, warning: Option<St
         }),
         warning,
     )
+}
+
+pub fn import_database_with_sync<F>(db: Arc<Database>, import: F) -> Result<Value, AppError>
+where
+    F: FnOnce(&Database) -> Result<String, AppError>,
+{
+    let db_for_sync = db.clone();
+    let backup_id = import(&db)?;
+    let warning = post_sync_warning_from_result(Ok(run_post_import_sync(db_for_sync)));
+    if let Some(msg) = warning.as_ref() {
+        log::warn!("[Import] post-import sync warning: {msg}");
+    }
+    Ok(success_payload_with_warning(backup_id, warning))
 }
 
 #[cfg(test)]

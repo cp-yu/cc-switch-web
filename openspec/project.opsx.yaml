@@ -74,7 +74,7 @@ capabilities:
     status: active
   - id: cap.runtime.web
     type: capability
-    intent: Serve the embedded SPA and API endpoints for the Web runtime.
+    intent: Serve the embedded SPA, stable API endpoints, and authenticated SQL upload/download routes for the Web runtime.
     status: active
   - id: cap.settings.preferences
     type: capability
@@ -82,7 +82,7 @@ capabilities:
     status: active
   - id: cap.settings.backup
     type: capability
-    intent: Export, import, create, list, and restore persisted application data.
+    intent: Export, import, create, list, and restore persisted application data across desktop file paths and Web browser upload/download flows.
     status: active
   - id: cap.settings.sync
     type: capability

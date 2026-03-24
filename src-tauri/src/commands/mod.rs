@@ -68,6 +68,8 @@ pub use settings::*;
 pub use skill::*;
 #[cfg(feature = "desktop")]
 pub use stream_check::*;
+#[cfg(feature = "desktop")]
+pub use sync_support::*;
 pub use usage::*;
 #[cfg(feature = "desktop")]
 pub use webdav_sync::*;

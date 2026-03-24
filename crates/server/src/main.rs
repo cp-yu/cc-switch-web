@@ -1,19 +1,23 @@
 use axum::{
     body::Body,
+    extract::DefaultBodyLimit,
     http::{header, Response, StatusCode, Uri},
     response::{Html, IntoResponse},
     routing::{get, post},
     Router,
 };
 use rust_embed::RustEmbed;
-use std::net::TcpListener as StdTcpListener;
+use std::net::{IpAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use cc_switch_server::{
-    api::{invoke_handler, upgrade_handler},
+    api::{
+        export_sql_download_handler, import_sql_upload_handler, invoke_handler,
+        upgrade_handler, MAX_SQL_UPLOAD_BYTES,
+    },
     create_event_bus,
     load_auth_config, SessionStore,
     ServerState,
@@ -107,6 +111,14 @@ fn find_available_port(host: &str, start_port: u16) -> Option<u16> {
     None
 }
 
+fn is_loopback_host(host: &str) -> bool {
+    matches!(host, "localhost")
+        || host
+            .parse::<IpAddr>()
+            .map(|addr| addr.is_loopback())
+            .unwrap_or(false)
+}
+
 #[tokio::main]
 async fn main() {
     // Initialize tracing
@@ -157,7 +169,10 @@ async fn main() {
     let api_routes = Router::new()
         .route("/invoke", post(invoke_handler))
         .route("/ws", get(upgrade_handler))
-        .with_state(state);
+        .route("/import-config", post(import_sql_upload_handler))
+        .route("/export-config", get(export_sql_download_handler))
+        .layer(DefaultBodyLimit::max(MAX_SQL_UPLOAD_BYTES))
+        .with_state(state.clone());
 
     // Check if frontend assets are embedded
     let has_frontend = Assets::get("index.html").is_some();
@@ -194,10 +209,13 @@ async fn main() {
         .map(|v| v != "0" && v.to_lowercase() != "false")
         .unwrap_or(true);
 
+    let is_loopback = is_loopback_host(&host);
+    let allow_auto_port = is_loopback && auto_port;
+
     // Find available port
     let port = if is_port_available(&host, requested_port) {
         requested_port
-    } else if auto_port {
+    } else if allow_auto_port {
         eprintln!();
         eprintln!("⚠️  Port {} is already in use", requested_port);
         match find_available_port(&host, requested_port + 1) {
@@ -220,7 +238,10 @@ async fn main() {
         }
     } else {
         eprintln!();
-        eprintln!("❌ Error: Port {} is already in use", requested_port);
+        eprintln!("❌ Error: Port {} is already in use on {}", requested_port, host);
+        if !is_loopback {
+            eprintln!("   Remote-access mode requires a stable host/port and will not auto-switch ports.");
+        }
         eprintln!();
         eprintln!("   Solutions:");
         eprintln!("   1. Stop the process using this port:");
@@ -228,9 +249,11 @@ async fn main() {
         eprintln!();
         eprintln!("   2. Use a different port:");
         eprintln!("      CC_SWITCH_PORT=8080 ./cc-switch-web");
-        eprintln!();
-        eprintln!("   3. Enable auto-port selection (default):");
-        eprintln!("      CC_SWITCH_AUTO_PORT=true ./cc-switch-web");
+        if is_loopback {
+            eprintln!();
+            eprintln!("   3. Enable auto-port selection:");
+            eprintln!("      CC_SWITCH_AUTO_PORT=true ./cc-switch-web");
+        }
         eprintln!();
         std::process::exit(1);
     };
@@ -247,9 +270,25 @@ async fn main() {
     println!("║  📡 API:       http://{}:{}/api{:14}║", host, port, "");
     println!("║  🔌 WebSocket: ws://{}:{}/api/ws{:11}║", host, port, "");
     println!("╠════════════════════════════════════════════════════╣");
+    if !is_loopback {
+        println!("║  🔒 Auth:      Enable ~/.cc-switch/web-auth.json   ║");
+        println!("║  📥 SQL Upload: POST /api/import-config            ║");
+        println!("║  📤 SQL Export: GET  /api/export-config            ║");
+        println!("╠════════════════════════════════════════════════════╣");
+    }
     println!("║  Press Ctrl+C to stop                              ║");
     println!("╚════════════════════════════════════════════════════╝");
     println!();
+
+    if !is_loopback {
+        tracing::info!("Remote access enabled on http://{}", addr);
+        if state.auth_config.is_some() {
+            tracing::info!("Authenticated SQL upload available at /api/import-config");
+            tracing::info!("Authenticated SQL export available at /api/export-config");
+        } else {
+            tracing::warn!("Remote access is enabled without web-auth.json; authenticated upload protection is disabled");
+        }
+    }
 
     tracing::info!("Starting CC-Switch server on {}", addr);
 

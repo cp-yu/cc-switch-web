@@ -5,9 +5,7 @@ use std::path::PathBuf;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
-use crate::commands::sync_support::{
-    post_sync_warning_from_result, run_post_import_sync, success_payload_with_warning,
-};
+use crate::import_export_support::{export_database_to_file, import_database_with_sync};
 use crate::database::backup::BackupEntry;
 use crate::database::Database;
 use crate::error::AppError;
@@ -25,7 +23,7 @@ pub async fn export_config_to_file(
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let target_path = PathBuf::from(&filePath);
-        db.export_sql(&target_path)?;
+        export_database_to_file(db, &target_path)?;
         Ok::<_, AppError>(json!({
             "success": true,
             "message": "SQL exported successfully",
@@ -44,15 +42,9 @@ pub async fn import_config_from_file(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let db = state.db.clone();
-    let db_for_sync = db.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let path_buf = PathBuf::from(&filePath);
-        let backup_id = db.import_sql(&path_buf)?;
-        let warning = post_sync_warning_from_result(Ok(run_post_import_sync(db_for_sync)));
-        if let Some(msg) = warning.as_ref() {
-            log::warn!("[Import] post-import sync warning: {msg}");
-        }
-        Ok::<_, AppError>(success_payload_with_warning(backup_id, warning))
+        import_database_with_sync(db, |db| db.import_sql(&path_buf))
     })
     .await
     .map_err(|e| format!("导入配置失败: {e}"))?

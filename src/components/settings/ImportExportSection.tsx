@@ -1,46 +1,59 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   FolderOpen,
   Loader2,
   Save,
+  Upload,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import type { ImportStatus } from "@/hooks/useImportExport";
+import type { ImportMode, ImportStatus } from "@/hooks/useImportExport";
 
 interface ImportExportSectionProps {
+  importMode: ImportMode;
   status: ImportStatus;
   selectedFile: string;
   errorMessage: string | null;
   backupId: string | null;
   isImporting: boolean;
+  isExporting: boolean;
   onSelectFile: () => Promise<void>;
+  onSelectUploadFile: (file: File | null) => void;
   onImport: () => Promise<void>;
   onExport: () => Promise<void>;
   onClear: () => void;
 }
 
 export function ImportExportSection({
+  importMode,
   status,
   selectedFile,
   errorMessage,
   backupId,
   isImporting,
+  isExporting,
   onSelectFile,
+  onSelectUploadFile,
   onImport,
   onExport,
   onClear,
 }: ImportExportSectionProps) {
   const { t } = useTranslation();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const isWebMode = importMode === "web";
 
   const selectedFileName = useMemo(() => {
     if (!selectedFile) return "";
     const segments = selectedFile.split(/[\\/]/);
     return segments[segments.length - 1] || selectedFile;
   }, [selectedFile]);
+
+  const openUploadPicker = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <section className="space-y-4">
@@ -49,69 +62,150 @@ export function ImportExportSection({
           {t("settings.importExport")}
         </h3>
         <p className="text-sm text-muted-foreground">
-          {t("settings.importExportHint")}
+          {isWebMode
+            ? t("settings.importExportHintWeb", {
+                defaultValue:
+                  "Web 模式通过浏览器直接上传或下载 SQL 备份。",
+              })
+            : t("settings.importExportHint")}
         </p>
       </header>
 
       <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-6">
-        {/* Import and Export Buttons Side by Side */}
-        <div className="grid grid-cols-2 gap-4 items-stretch">
-          {/* Import Button */}
-          <div className="relative">
-            <Button
-              type="button"
-              className={`w-full h-auto py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white ${selectedFile && !isImporting ? "flex-col items-start" : "items-center"}`}
-              onClick={!selectedFile ? onSelectFile : onImport}
-              disabled={isImporting}
-            >
-              <div className="flex items-center gap-2 w-full justify-center">
-                {isImporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-                ) : selectedFile ? (
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                ) : (
-                  <FolderOpen className="h-4 w-4 flex-shrink-0" />
-                )}
-                <span className="font-medium">
-                  {isImporting
-                    ? t("settings.importing")
-                    : selectedFile
-                      ? t("settings.import")
-                      : t("settings.selectConfigFile")}
-                </span>
+        {isWebMode ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".sql"
+              className="hidden"
+              onChange={(event) => {
+                onSelectUploadFile(event.target.files?.[0] ?? null);
+                event.currentTarget.value = "";
+              }}
+            />
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="relative">
+                <Button
+                  type="button"
+                  className="w-full h-full py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
+                  onClick={openUploadPicker}
+                  disabled={isImporting || isExporting}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  {selectedFile
+                    ? t("settings.replaceImportFile", {
+                        defaultValue: "重新选择 SQL 文件",
+                      })
+                    : t("settings.selectConfigFile")}
+                </Button>
+                {selectedFile ? (
+                  <button
+                    type="button"
+                    onClick={onClear}
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-colors z-10"
+                    aria-label={t("common.clear")}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </button>
+                ) : null}
               </div>
-              {selectedFile && !isImporting && (
-                <div className="mt-2 w-full text-left">
-                  <p className="text-xs font-mono text-white/80 truncate">
-                    📄 {selectedFileName}
-                  </p>
-                </div>
-              )}
-            </Button>
-            {selectedFile && (
-              <button
+              <Button
                 type="button"
-                onClick={onClear}
-                className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-colors z-10"
-                aria-label={t("common.clear")}
+                className="w-full h-full py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
+                onClick={onImport}
+                disabled={!selectedFile || isImporting || isExporting}
               >
-                <XCircle className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Export Button */}
-          <div>
+                {isImporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                )}
+                {isImporting ? t("settings.importing") : t("settings.import")}
+              </Button>
+              <Button
+                type="button"
+                className="w-full h-full py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
+                onClick={onExport}
+                disabled={isImporting || isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {isExporting
+                  ? t("settings.exporting", { defaultValue: "导出中" })
+                  : t("settings.exportConfig")}
+              </Button>
+            </div>
+            {selectedFile ? (
+              <p className="text-xs font-mono text-muted-foreground truncate">
+                {selectedFileName}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 items-stretch">
+            <div className="relative">
+              <Button
+                type="button"
+                className={`w-full h-auto py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white ${selectedFile && !isImporting ? "flex-col items-start" : "items-center"}`}
+                onClick={!selectedFile ? onSelectFile : onImport}
+                disabled={isImporting || isExporting}
+              >
+                <div className="flex items-center gap-2 w-full justify-center">
+                  {isImporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                  ) : selectedFile ? (
+                    <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                  )}
+                  <span className="font-medium">
+                    {isImporting
+                      ? t("settings.importing")
+                      : selectedFile
+                        ? t("settings.import")
+                        : t("settings.selectConfigFile")}
+                  </span>
+                </div>
+                {selectedFile && !isImporting ? (
+                  <div className="mt-2 w-full text-left">
+                    <p className="text-xs font-mono text-white/80 truncate">
+                      {selectedFileName}
+                    </p>
+                  </div>
+                ) : null}
+              </Button>
+              {selectedFile ? (
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-colors z-10"
+                  aria-label={t("common.clear")}
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
             <Button
               type="button"
               className="w-full h-full py-3 px-4 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white items-center"
               onClick={onExport}
+              disabled={isImporting || isExporting}
             >
-              <Save className="mr-2 h-4 w-4" />
-              {t("settings.exportConfig")}
+              {isExporting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              {isExporting
+                ? t("settings.exporting", { defaultValue: "导出中" })
+                : t("settings.exportConfig")}
             </Button>
           </div>
-        </div>
+        )}
 
         <ImportStatusMessage
           status={status}

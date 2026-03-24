@@ -1,8 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { settingsApi } from "@/lib/api";
-import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
+import { settingsApi, buildDefaultExportFileName } from "@/lib/api/settings";
 
 export type ImportStatus =
   | "idle"
@@ -11,21 +10,41 @@ export type ImportStatus =
   | "partial-success"
   | "error";
 
+export type ImportMode = "desktop" | "web";
+
 export interface UseImportExportOptions {
   onImportSuccess?: () => void | Promise<void>;
 }
 
 export interface UseImportExportResult {
+  importMode: ImportMode;
   selectedFile: string;
   status: ImportStatus;
   errorMessage: string | null;
   backupId: string | null;
   isImporting: boolean;
+  isExporting: boolean;
   selectImportFile: () => Promise<void>;
+  setUploadFile: (file: File | null) => void;
   clearSelection: () => void;
   importConfig: () => Promise<void>;
   exportConfig: () => Promise<void>;
   resetStatus: () => void;
+}
+
+function isDesktopRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI__" in (window as object);
+}
+
+function triggerBrowserDownload(blob: Blob, fileName: string) {
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
 }
 
 export function useImportExport(
@@ -34,24 +53,47 @@ export function useImportExport(
   const { t } = useTranslation();
   const { onImportSuccess } = options;
 
-  const [selectedFile, setSelectedFile] = useState("");
+  const importMode: ImportMode = useMemo(
+    () => (isDesktopRuntime() ? "desktop" : "web"),
+    [],
+  );
+  const [selectedFilePath, setSelectedFilePath] = useState("");
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ImportStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [backupId, setBackupId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const selectedFile =
+    importMode === "desktop"
+      ? selectedFilePath
+      : (selectedUploadFile?.name ?? "");
 
   const clearSelection = useCallback(() => {
-    setSelectedFile("");
+    setSelectedFilePath("");
+    setSelectedUploadFile(null);
+    setStatus("idle");
+    setErrorMessage(null);
+    setBackupId(null);
+  }, []);
+
+  const setUploadFile = useCallback((file: File | null) => {
+    setSelectedUploadFile(file);
     setStatus("idle");
     setErrorMessage(null);
     setBackupId(null);
   }, []);
 
   const selectImportFile = useCallback(async () => {
+    if (importMode !== "desktop") {
+      return;
+    }
+
     try {
       const filePath = await settingsApi.openFileDialog();
       if (filePath) {
-        setSelectedFile(filePath);
+        setSelectedFilePath(filePath);
         setStatus("idle");
         setErrorMessage(null);
       }
@@ -63,10 +105,10 @@ export function useImportExport(
         }),
       );
     }
-  }, [t]);
+  }, [importMode, t]);
 
   const importConfig = useCallback(async () => {
-    if (!selectedFile) {
+    if (importMode === "desktop" && !selectedFilePath) {
       toast.error(
         t("settings.selectFileFailed", {
           defaultValue: "请选择有效的 SQL 备份文件",
@@ -75,14 +117,26 @@ export function useImportExport(
       return;
     }
 
-    if (isImporting) return;
+    if (importMode === "web" && !selectedUploadFile) {
+      toast.error(
+        t("settings.selectFileFailed", {
+          defaultValue: "请选择有效的 SQL 备份文件",
+        }),
+      );
+      return;
+    }
+
+    if (isImporting || isExporting) return;
 
     setIsImporting(true);
     setStatus("importing");
     setErrorMessage(null);
 
     try {
-      const result = await settingsApi.importConfigFromFile(selectedFile);
+      const result =
+        importMode === "desktop"
+          ? await settingsApi.importConfigFromFile(selectedFilePath)
+          : await settingsApi.importConfigFromUpload(selectedUploadFile!);
       if (!result.success) {
         setStatus("error");
         const message =
@@ -96,33 +150,21 @@ export function useImportExport(
       }
 
       setBackupId(result.backupId ?? null);
-      // 导入成功后立即触发外部刷新（与 live 同步结果解耦）
-      // - 避免 sync 失败时 UI 不刷新
-      // - 避免依赖 setTimeout（组件卸载会取消）
       void onImportSuccess?.();
 
-      const syncResult = await syncCurrentProvidersLiveSafe();
-      if (syncResult.ok) {
-        setStatus("success");
-        toast.success(
-          t("settings.importSuccess", {
-            defaultValue: "配置导入成功",
-          }),
-          { closeButton: true },
-        );
-      } else {
-        console.error(
-          "[useImportExport] Failed to sync live config",
-          syncResult.error,
-        );
+      if (result.warning) {
         setStatus("partial-success");
-        toast.warning(
-          t("settings.importPartialSuccess", {
-            defaultValue:
-              "配置已导入，但同步到当前供应商失败。请手动重新选择一次供应商。",
-          }),
-        );
+        toast.warning(result.warning, { closeButton: true });
+        return;
       }
+
+      setStatus("success");
+      toast.success(
+        t("settings.importSuccess", {
+          defaultValue: "配置导入成功",
+        }),
+        { closeButton: true },
+      );
     } catch (error) {
       console.error("[useImportExport] Failed to import config", error);
       setStatus("error");
@@ -138,13 +180,35 @@ export function useImportExport(
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, onImportSuccess, selectedFile, t]);
+  }, [
+    importMode,
+    isExporting,
+    isImporting,
+    onImportSuccess,
+    selectedFilePath,
+    selectedUploadFile,
+    t,
+  ]);
 
   const exportConfig = useCallback(async () => {
+    if (isImporting || isExporting) return;
+
+    setIsExporting(true);
     try {
-      const now = new Date();
-      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
-      const defaultName = `cc-switch-export-${stamp}.sql`;
+      if (importMode === "web") {
+        const { blob, fileName } = await settingsApi.exportConfigForDownload();
+        triggerBrowserDownload(blob, fileName);
+        toast.success(
+          t("settings.configExported", {
+            defaultValue: "配置已导出",
+          }) + `
+${fileName}`,
+          { closeButton: true },
+        );
+        return;
+      }
+
+      const defaultName = buildDefaultExportFileName();
       const destination = await settingsApi.saveFileDialog(defaultName);
       if (!destination) {
         toast.error(
@@ -161,7 +225,8 @@ export function useImportExport(
         toast.success(
           t("settings.configExported", {
             defaultValue: "配置已导出",
-          }) + `\n${displayPath}`,
+          }) + `
+${displayPath}`,
           { closeButton: true },
         );
       } else {
@@ -179,8 +244,10 @@ export function useImportExport(
           message: error instanceof Error ? error.message : String(error ?? ""),
         }),
       );
+    } finally {
+      setIsExporting(false);
     }
-  }, [t]);
+  }, [importMode, isExporting, isImporting, t]);
 
   const resetStatus = useCallback(() => {
     setStatus("idle");
@@ -189,12 +256,15 @@ export function useImportExport(
   }, []);
 
   return {
+    importMode,
     selectedFile,
     status,
     errorMessage,
     backupId,
     isImporting,
+    isExporting,
     selectImportFile,
+    setUploadFile,
     clearSelection,
     importConfig,
     exportConfig,

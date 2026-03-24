@@ -1,6 +1,6 @@
 # CC-Switch Web 模式使用指南
 
-CC-Switch 现在支持 Web 模式，通过单端口 `17666` 同时提供 Web 界面和后端服务。
+CC-Switch 现在支持 Web 模式，通过单端口 `17666` 同时提供 Web 界面和后端服务。默认绑定 `127.0.0.1`；如需远程访问，必须显式设置非回环 `CC_SWITCH_HOST`，并保持固定 `CC_SWITCH_PORT`。
 
 ## 架构
 
@@ -55,7 +55,15 @@ cargo run --manifest-path crates/server/Cargo.toml
 cargo run --release --manifest-path crates/server/Cargo.toml
 ```
 
-后端将在 `http://localhost:17666` 启动
+后端默认将在 `http://127.0.0.1:17666` 启动。
+
+如需让其他设备访问，显式指定非回环 host 和固定端口：
+
+```bash
+CC_SWITCH_HOST=0.0.0.0 CC_SWITCH_PORT=17666 cargo run --manifest-path crates/server/Cargo.toml
+```
+
+远程访问场景下，如果请求端口已被占用，服务会直接失败退出，不会自动切换到别的端口。
 
 ### 2. 启动前端开发服务器（仅热重载开发需要）
 
@@ -153,13 +161,19 @@ nano ~/.cc-switch/web-auth.json
 - 配置文件中只存储哈希，原始密码不会被保存
 - 关闭浏览器后 Cookie 仍然有效（7天内无需重新登录）
 - 清除浏览器 Cookie 后需要重新登录
+- 远程访问时建议始终启用 `~/.cc-switch/web-auth.json`，SQL 上传下载入口都会复用同一个登录会话
 
 ## 端口说明
 
 - **单端口入口**: `17666` - Web 界面 + JSON-RPC API
-  - Web UI: `http://localhost:17666/`
-  - HTTP: `http://localhost:17666/api/invoke`
-  - WebSocket: `ws://localhost:17666/api/ws`
+  - Web UI: `http://127.0.0.1:17666/`
+  - HTTP: `http://127.0.0.1:17666/api/invoke`
+  - WebSocket: `ws://127.0.0.1:17666/api/ws`
+- **默认绑定**: 未设置 `CC_SWITCH_HOST` 时，服务只监听 `127.0.0.1`。
+- **远程访问**: 需要显式设置非回环 `CC_SWITCH_HOST`（例如 `0.0.0.0` 或局域网 IP）和固定 `CC_SWITCH_PORT`。
+- **端口冲突策略**: 仅回环 host 会在 `CC_SWITCH_AUTO_PORT=true` 时尝试自动换端口；非回环 host 遇到端口占用会直接启动失败。
+- **SQL 上传入口**: Web 模式通过 `POST /api/import-config` 接收浏览器上传的 SQL 备份，不依赖服务器本机文件路径；启用 `web-auth.json` 时，该入口与 Web UI 共用同一个认证会话。
+- **SQL 下载入口**: Web 模式通过 `GET /api/export-config` 直接返回 SQL 导出文件，由浏览器触发下载；同样复用现有登录会话。
 
 ## 数据共享
 
@@ -176,6 +190,7 @@ Web 模式支持 70+ API 命令：
 
 - ✅ Provider 管理（增删改查、切换）
 - ✅ Settings 配置
+- ✅ SQL 配置导入导出（桌面端本机路径 / Web 浏览器上传下载）
 - ✅ MCP 服务器管理
 - ✅ Prompt 提示词管理
 - ✅ Skill 技能管理
@@ -200,9 +215,22 @@ tail -f /tmp/cc-switch-backend.log
 
 ### 前端无法连接后端
 
-1. 确认后端已启动：`curl http://localhost:17666/`
-2. 如果你在用 `3001` 开发服务器，检查 `vite.config.ts` 中的 proxy 设置
-3. 查看浏览器控制台是否有错误
+1. 确认后端已启动：`curl http://127.0.0.1:17666/`
+2. 如果你在远程设备访问，确认服务使用了非回环 `CC_SWITCH_HOST`，且目标主机防火墙已放行对应端口
+3. 如果你在用 `3001` 开发服务器，检查 `vite.config.ts` 中的 proxy 设置
+4. 查看浏览器控制台是否有错误
+
+### 远程访问下 SQL 导入不可用
+
+1. 确认服务不是默认的 `127.0.0.1` 绑定，而是显式设置了 `CC_SWITCH_HOST=0.0.0.0` 或具体局域网 IP
+2. 确认浏览器已经登录；启用 `~/.cc-switch/web-auth.json` 后，`POST /api/import-config` 会要求有效会话 Cookie
+3. Web 模式导入使用浏览器选择的本地 `.sql` 文件上传，不需要也不支持填写服务器本机文件路径
+
+### 远程访问下 SQL 导出不可用
+
+1. 确认浏览器已经登录；启用 `~/.cc-switch/web-auth.json` 后，`GET /api/export-config` 会要求有效会话 Cookie
+2. 确认访问的是稳定的 `CC_SWITCH_HOST:CC_SWITCH_PORT` 地址；非回环 host 端口冲突时服务会直接失败，不会偷偷切到别的端口
+3. Web 模式导出会由浏览器下载 SQL 文件，不会在服务器本机弹出保存对话框
 
 ### 数据不同步
 
